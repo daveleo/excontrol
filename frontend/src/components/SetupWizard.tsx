@@ -41,7 +41,16 @@ export function SetupWizard({ initial, onClose }: { initial: SetupState; onClose
   }, [devices]);
 
   const mutate = (idx: number, patch: Partial<SetupDevice>) =>
-    setDevices((ds) => ds.map((d, i) => (i === idx ? { ...d, ...patch } : d)));
+    setDevices((ds) => {
+      const before = ds[idx];
+      const renamed = patch.id !== undefined && before && patch.id !== before.id ? { from: before.id, to: patch.id } : null;
+      return ds.map((d, i) => {
+        if (i === idx) return { ...d, ...patch };
+        // keep `poweredBy` pointing at a renamed EPS
+        if (renamed && d.poweredBy === renamed.from) return { ...d, poweredBy: renamed.to };
+        return d;
+      });
+    });
 
   const freshId = (type: DeviceType, taken: Set<string>) => {
     const stem = { "novastar-h": "h", "novastar-coex": "coex", "expromo-eps": "eps", obs: "obs" }[type];
@@ -96,8 +105,18 @@ export function SetupWizard({ initial, onClose }: { initial: SetupState; onClose
     }
   };
 
+  const dirty = useMemo(
+    () => JSON.stringify(devices) !== JSON.stringify(initial.devices) || JSON.stringify(app) !== JSON.stringify(initial.app),
+    [devices, app, initial],
+  );
+  const close = () => {
+    if (dirty && !confirm("Discard your changes to the device setup?")) return;
+    onClose();
+  };
+
   const save = async () => {
     if (idError) return;
+    if (initial.configured && devices.length === 0 && !confirm("This removes every device. The setup wizard will reappear until you add one. Continue?")) return;
     setSaving(true);
     setSaveErr(null);
     try {
@@ -126,7 +145,7 @@ export function SetupWizard({ initial, onClose }: { initial: SetupState; onClose
             </p>
           </div>
           {initial.configured && (
-            <button className="wiz-x" onClick={onClose} aria-label="Close">✕</button>
+            <button className="wiz-x" onClick={close} aria-label="Close">✕</button>
           )}
         </header>
 
@@ -177,7 +196,7 @@ export function SetupWizard({ initial, onClose }: { initial: SetupState; onClose
           {idError && <span className="probe-bad">{idError}</span>}
           {saveErr && <span className="probe-bad">{saveErr}</span>}
           <div className="spacer" />
-          {initial.configured && <button onClick={onClose} disabled={saving}>Cancel</button>}
+          {initial.configured && <button onClick={close} disabled={saving}>Cancel</button>}
           <button className="primary" disabled={saving || !!idError || devices.length === 0} onClick={save}>
             {saving ? "Saving…" : initial.configured ? "Save changes" : "Save & start"}
           </button>

@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Driver } from "./drivers/types.js";
 import type { DeviceType, ZoneState } from "@excontrol/shared";
-import { splitTarget, applyPreset, savePreset } from "./core/presets.js";
+import { splitTarget, applyPreset, savePreset, deletePreset } from "./core/presets.js";
+import { setEntries } from "./core/schedule.js";
 import { _setDriverForTest, _clearDriversForTest } from "./core/registry.js";
 import { loadConfig, getConfig } from "./config.js";
 
@@ -106,5 +107,20 @@ describe("savePreset persistence", () => {
     savePreset({ id: "p", label: "Renamed", actions: [{ target: "h1", brightness: 1 }] });
     expect(getConfig().presets).toHaveLength(1);
     expect(getConfig().presets[0]!.label).toBe("Renamed");
+  });
+});
+
+describe("deletePreset", () => {
+  it("disables a schedule entry that recalled the deleted preset", () => {
+    savePreset({ id: "day", label: "Day", actions: [] });
+    setEntries([
+      { id: "s1", label: "Morning look", time: "08:00", days: [], action: "apply_preset", presetId: "day", enabled: true },
+      { id: "s2", label: "Evening off", time: "20:00", days: [], action: "power_off", target: "all", enabled: true },
+    ]);
+    deletePreset("day");
+    const entries = getConfig().schedule.entries;
+    expect(entries.find((e) => e.id === "s1")!.enabled).toBe(false);
+    expect(entries.find((e) => e.id === "s1")!.presetId).toBeUndefined();
+    expect(entries.find((e) => e.id === "s2")!.enabled).toBe(true); // untouched
   });
 });

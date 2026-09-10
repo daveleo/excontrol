@@ -5,5 +5,8 @@ export default defineConfig({
     include: ["src/**/*.test.ts"],
     environment: "node",
     setupFiles: ["./vitest.setup.ts"],
+    // Windows + parallel workers intermittently hit EBUSY on vitest's transform cache.
+    // The suite runs in ~1s; serialise the files and the flake goes away.
+    fileParallelism: false,
   },
 });

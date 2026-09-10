@@ -30,8 +30,18 @@ export function savePreset(p: Partial<AppPreset> & { label: string }): AppPreset
 export function deletePreset(id: string): void {
   const cfg = getConfig();
   const presets = cfg.presets.filter((p) => p.id !== id);
-  saveConfig({ ...cfg, presets });
+  // Disable any schedule entry that recalled this preset — leaving a dangling ref would
+  // silently do nothing at fire time.
+  const orphaned = cfg.schedule.entries.filter((e) => e.action === "apply_preset" && e.presetId === id);
+  const schedule = orphaned.length
+    ? { ...cfg.schedule, entries: cfg.schedule.entries.map((e) => (orphaned.includes(e) ? { ...e, enabled: false, presetId: undefined } : e)) }
+    : cfg.schedule;
+  saveConfig({ ...cfg, presets, schedule });
   bus.emit("broadcast", { t: "presets", presets });
+  if (orphaned.length) {
+    bus.emit("broadcast", { t: "schedule", schedule });
+    toast("warn", `Disabled ${orphaned.length} schedule entr${orphaned.length === 1 ? "y" : "ies"} that used that preset`);
+  }
 }
 
 /** [deviceId, zoneId?] from "dev" or "dev:zone" */

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { DeviceState, ZoneState, PowerLevel } from "@excontrol/shared";
 import { setBrightness, recallPreset, setBlackout, runAction } from "../api.js";
 
@@ -197,10 +197,19 @@ function Brightness({
 }) {
   const [local, setLocal] = useState<number | null>(null);
   const shown = local ?? value;
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
   const commit = () => {
+    if (timer.current) clearTimeout(timer.current);
     if (local != null) onCommit(local);
     setLocal(null);
   };
+  // keyboard: arrow keys fire rapid changes — commit once they settle
+  const commitDebounced = () => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(commit, 400);
+  };
+
   return (
     <label className="brightness">
       <span>Brightness</span>
@@ -213,7 +222,7 @@ function Brightness({
         onChange={(e) => setLocal(Number(e.target.value))}
         onMouseUp={commit}
         onTouchEnd={commit}
-        onKeyUp={commit}
+        onKeyUp={commitDebounced}
       />
       <span className="pct">{shown}%</span>
     </label>

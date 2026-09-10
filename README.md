@@ -7,9 +7,10 @@ controllers as the install has.
 Supports **NovaStar H-series** and **COEX** processors, **Expromo EPS** power units, and
 **OBS Studio**. Every device is optional; you can have any number of each.
 
-> **Status: early development (v0.1.0).** The generalised core is in place. The Electron
-> installer, the setup wizard and the update checker are still being built — see
-> [`docs/ROADMAP.md`](docs/ROADMAP.md). Until then it runs from source (below). The
+> **Status: pre-release (v0.1.0).** The generalised core, the Windows installer and the
+> first-run setup wizard are in place; the update checker and diagnostics export are still
+> to come — see [`docs/ROADMAP.md`](docs/ROADMAP.md). No published release yet, so for now
+> build the installer yourself (`npm run desktop:dist`) or run from source (below). The
 > production predecessor for the Expromo Aarhus showroom is
 > [`showroom-control`](https://github.com/daveleo/showroom-control) (frozen at `v1.0`).
 
@@ -34,10 +35,12 @@ npm run dev:backend                   # :8080
 npm run dev:frontend                  # :5173 (proxies to :8080)
 ```
 
-Copy `config/excontrol.config.example.json` to `config/excontrol.config.json` and fill in
-your devices, or start with an empty config and add them via the (upcoming) wizard. In
-production the config lives at `%ProgramData%\eXcontrol\excontrol.config.json`
-(`EXCONTROL_DATA_DIR`).
+Start with no config and add your devices in the browser — the setup wizard opens
+automatically on first run (or via **Devices** in the top bar). It walks through the
+H-series OpenAPI key, tests each connection, and writes the config for you. To pre-fill it
+by hand instead, copy `config/excontrol.config.example.json` to
+`config/excontrol.config.json`. In production the config lives at
+`%ProgramData%\eXcontrol\excontrol.config.json` (`EXCONTROL_DATA_DIR`).
 
 ## Config
 
