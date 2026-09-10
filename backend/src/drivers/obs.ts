@@ -1,7 +1,7 @@
 import OBSWebSocket from "obs-websocket-js";
 import { BaseDriver } from "./types.js";
 import type { ObsConfig } from "../config.js";
-import type { Preset } from "@excontrol/shared";
+import type { Preset, ProbeResult } from "@excontrol/shared";
 
 const ZONE = "scenes";
 
@@ -38,6 +38,39 @@ export class ObsDriver extends BaseDriver {
     await super.stop();
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     if (this.connected) await this.obs.disconnect();
+  }
+
+  /** One-shot connection test for the setup wizard. Opens its own socket and closes it. */
+  static async probe(cfg: ObsConfig): Promise<ProbeResult> {
+    const hp = `${cfg.host}:${cfg.port}`;
+    const obs = new OBSWebSocket();
+    try {
+      const { obsWebSocketVersion, negotiatedRpcVersion } = await obs.connect(
+        `ws://${cfg.host}:${cfg.port}`,
+        cfg.password || undefined,
+        { rpcVersion: 1 },
+      );
+      void negotiatedRpcVersion;
+      const { scenes } = await obs.call("GetSceneList");
+      return {
+        ok: true,
+        hint: "ok",
+        detail: `Connected to OBS (websocket ${obsWebSocketVersion}).`,
+        info: `${scenes.length} scene${scenes.length === 1 ? "" : "s"}`,
+      };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      // obs-websocket-js close codes: 4009 auth failed, 4008 no auth provided but required
+      if (/4009|authentication (failed|is )|Authentication/i.test(msg))
+        return { ok: false, hint: "auth", detail: "OBS rejected the password. Copy it from OBS → Tools → WebSocket Server Settings → Show Connect Info." };
+      if (/4008|password is required|missing.*auth/i.test(msg))
+        return { ok: false, hint: "auth", detail: "OBS requires a password but none was given — get it from OBS → Tools → WebSocket Server Settings." };
+      if (/ECONNREFUSED|failed to connect|WebSocket.*(closed|error)|1006/i.test(msg))
+        return { ok: false, hint: "unreachable", detail: `Could not reach the OBS WebSocket server at ${hp}. In OBS, enable Tools → WebSocket Server Settings and check the port.` };
+      return { ok: false, hint: "bad-response", detail: `Could not connect to OBS: ${msg}` };
+    } finally {
+      try { await obs.disconnect(); } catch { /* already down */ }
+    }
   }
 
   async recallPreset(zoneId: string, presetId: number): Promise<void> {

@@ -6,6 +6,8 @@ import { NovastarCoexDriver } from "../drivers/novastar-mx40.js";
 import { EpsDriver } from "../drivers/eps.js";
 import { ObsDriver } from "../drivers/obs.js";
 import { store } from "./state.js";
+import { bus } from "./bus.js";
+import { recomputePower } from "./power.js";
 import { log } from "../logger.js";
 
 function build(cfg: DeviceConfig): Driver {
@@ -54,4 +56,13 @@ export async function startDevices(cfg: AppConfig): Promise<void> {
 export async function stopDevices(): Promise<void> {
   await Promise.allSettled(allDrivers().map((d) => d.stop()));
   drivers.clear();
+}
+
+/** Tear down every driver and bring the set back up from a new config (setup wizard save). */
+export async function restartDevices(cfg: AppConfig): Promise<void> {
+  log.info({ devices: cfg.devices.map((d) => d.id) }, "restarting devices after config change");
+  await stopDevices();
+  await startDevices(cfg);
+  recomputePower();
+  bus.emit("broadcast", { t: "snapshot", state: store.snapshot() });
 }

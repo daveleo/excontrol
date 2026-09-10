@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 import CryptoJS from "crypto-js";
 import { BaseDriver } from "./types.js";
 import type { HConfig, ZoneConfig } from "../config.js";
-import type { Preset, ZoneState } from "@excontrol/shared";
+import type { Preset, ZoneState, ProbeResult } from "@excontrol/shared";
+import { netReason } from "../setup/neterr.js";
 
 /**
  * NovaStar H series Open API — one driver instance, one or more zones (screens).
@@ -50,6 +51,47 @@ export class NovastarHDriver extends BaseDriver {
         else throw e;
       }
     });
+  }
+
+  /** One-shot connection test for the setup wizard. Never polls. */
+  static async probe(cfg: HConfig): Promise<ProbeResult> {
+    return new NovastarHDriver(cfg).probeOnce();
+  }
+
+  private async probeOnce(): Promise<ProbeResult> {
+    const hp = `${this.c.host}:${this.c.port}`;
+    try {
+      const body = await this.call<{ screens?: Array<{ screenId: number; name?: string }> }>(
+        "/screen/readList",
+        { deviceId: 0 },
+      );
+      const screens = body?.screens ?? [];
+      return {
+        ok: true,
+        hint: "ok",
+        detail: screens.length
+          ? `Connected — found ${screens.length} screen${screens.length === 1 ? "" : "s"}.`
+          : "Connected, but no screens are defined on the controller yet.",
+        zones: screens.map((s) => ({
+          id: `s${s.screenId}`,
+          label: (s.name || "").trim() || `Screen ${s.screenId}`,
+          screenId: s.screenId,
+        })),
+      };
+    } catch (e) {
+      const net = netReason(e, hp);
+      if (net) return { ok: false, ...net };
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/status 15\b/.test(msg))
+        return { ok: false, hint: "disabled", detail: 'The controller rejected this OpenAPI entry ("Open_Id_Illegal"). In the controller\'s OpenAPI settings, check the Project ID and make sure this entry\'s Disable toggle is BLUE (enabled).' };
+      if (/status 13\b/.test(msg))
+        return { ok: false, hint: "misconfigured", detail: 'The OpenAPI project is not fully set up on the controller ("Open_Project_Illegal") — finish configuring the entry.' };
+      if (/status 912\b/.test(msg))
+        return { ok: false, hint: "booting", detail: "The controller is still starting up. Wait a minute and test again." };
+      if (/HTTP 5\d\d\b|Server_Err/.test(msg))
+        return { ok: false, hint: "auth", detail: "The controller returned a server error — usually a wrong Secret Key, or the Encryption checkbox not matching the controller." };
+      return { ok: false, hint: "bad-response", detail: `Unexpected response from the controller: ${msg}` };
+    }
   }
 
   async setBrightness(zoneId: string, pct: number): Promise<void> {

@@ -152,6 +152,11 @@ export function startPowerMonitor(): void {
   recompute();
 }
 
+/** Force a power-domain recompute — used after a config reload changes the device set. */
+export function recomputePower(): void {
+  recompute();
+}
+
 /** Fire an EPS power command by domain (eps id) or "all". */
 export async function powerDomain(target: string, on: boolean): Promise<void> {
   const cfg = getConfig();

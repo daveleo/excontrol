@@ -1,8 +1,8 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
-import type { DeviceType, AppPreset, Schedule } from "@excontrol/shared";
-import { BRAND } from "@excontrol/shared";
+import type { DeviceType, AppPreset, Schedule, SetupDevice, SetupState, SetupSaveBody } from "@excontrol/shared";
+import { BRAND, SECRET_KEPT } from "@excontrol/shared";
 import { log } from "./logger.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -143,6 +143,120 @@ function normalise(p: Partial<AppConfig>): AppConfig {
     presets: Array.isArray(p.presets) ? p.presets : [],
     schedule: p.schedule && Array.isArray(p.schedule.entries) ? p.schedule : { entries: [] },
   };
+}
+
+/* ---------- setup wizard ---------- */
+
+const DEFAULT_PORTS: Record<DeviceType, number> = {
+  "novastar-h": 8000,
+  "novastar-coex": 8001,
+  "expromo-eps": 5000,
+  obs: 4455,
+};
+
+/** Flatten a stored device to the wizard's editing shape, with secrets redacted. */
+function toSetupDevice(d: DeviceConfig): SetupDevice {
+  const base: SetupDevice = {
+    id: d.id,
+    type: d.type,
+    label: d.label,
+    enabled: d.enabled,
+    host: d.host,
+    port: d.port,
+    poweredBy: d.poweredBy ?? null,
+  };
+  if (d.type === "novastar-h") {
+    base.pId = d.pId;
+    base.secretKey = d.secretKey ? SECRET_KEPT : "";
+    base.encrypted = !!d.encrypted;
+    base.zones = d.zones ?? [];
+  }
+  if (d.type === "novastar-coex") base.zones = d.zones ?? [];
+  if (d.type === "obs") base.password = d.password ? SECRET_KEPT : "";
+  return base;
+}
+
+export function toSetupState(): SetupState {
+  return {
+    configured: isConfigured(),
+    app: { ...current.app },
+    devices: current.devices.map(toSetupDevice),
+    defaultPorts: DEFAULT_PORTS,
+  };
+}
+
+/** Replace SECRET_KEPT sentinels in a wizard device with the value already on disk. */
+export function resolveSecrets(input: SetupDevice): SetupDevice {
+  const stored = current.devices.find((d) => d.id === input.id);
+  const out = { ...input };
+  if (out.secretKey === SECRET_KEPT) out.secretKey = stored?.type === "novastar-h" ? stored.secretKey : "";
+  if (out.password === SECRET_KEPT) out.password = stored?.type === "obs" ? stored.password : "";
+  return out;
+}
+
+/** Build a stored DeviceConfig from a wizard device (resolving kept secrets). */
+function fromSetupDevice(input: SetupDevice): DeviceConfig {
+  const d = resolveSecrets(input);
+  const host = (d.host || "").trim();
+  const port = Number(d.port) || DEFAULT_PORTS[d.type];
+  const common = {
+    id: d.id.trim(),
+    label: (d.label || "").trim() || d.id.trim(),
+    enabled: d.enabled !== false,
+    host,
+    port,
+    poweredBy: d.poweredBy || null,
+  };
+  switch (d.type) {
+    case "novastar-h":
+      return {
+        ...common, type: "novastar-h",
+        pId: (d.pId || "").trim(),
+        secretKey: (d.secretKey || "").trim(),
+        encrypted: !!d.encrypted,
+        zones: cleanZones(d.zones, "number"),
+      };
+    case "novastar-coex":
+      return { ...common, type: "novastar-coex", zones: cleanZones(d.zones, "string") };
+    case "expromo-eps":
+      return { ...common, type: "expromo-eps" };
+    case "obs":
+      return { ...common, type: "obs", password: d.password || "" };
+  }
+}
+
+function cleanZones(zones: SetupDevice["zones"], screenIdKind: "number" | "string"): ZoneConfig[] {
+  return (zones ?? [])
+    .filter((z) => z && String(z.id).trim())
+    .map((z) => ({
+      id: String(z.id).trim(),
+      label: (z.label || "").trim() || String(z.id).trim(),
+      screenId: screenIdKind === "number" ? Number(z.screenId) || 0 : String(z.screenId ?? "").trim(),
+      ...(z.deviceId != null ? { deviceId: Number(z.deviceId) || 0 } : {}),
+    }));
+}
+
+/** Validate + persist a wizard submission. Presets/schedule are left untouched. */
+export function applySetup(body: SetupSaveBody): AppConfig {
+  const seenIds = new Set<string>();
+  for (const d of body.devices) {
+    const id = (d.id || "").trim();
+    if (!id) throw new Error("every device needs an id");
+    if (!/^[a-z0-9][a-z0-9-]*$/i.test(id)) throw new Error(`device id "${id}" — use letters, digits and hyphens only`);
+    if (seenIds.has(id)) throw new Error(`duplicate device id "${id}"`);
+    seenIds.add(id);
+  }
+  const next: AppConfig = {
+    app: {
+      name: (body.app?.name ?? current.app.name) || BRAND.name,
+      httpPort: Number(body.app?.httpPort ?? current.app.httpPort) || 8080,
+      bind: body.app?.bind ?? current.app.bind ?? "0.0.0.0",
+    },
+    devices: body.devices.map(fromSetupDevice),
+    presets: current.presets,
+    schedule: current.schedule,
+  };
+  return saveConfig(next); // saveConfig runs validate()
 }
 
 function validate(cfg: AppConfig): void {

@@ -31,10 +31,16 @@ class Store {
     return pkgVersion();
   }
 
+  private wired = false;
+
   init(seed: DeviceState[]) {
     this.devices.clear();
     for (const d of seed) this.devices.set(d.id, d);
-    bus.on("device:patch", (p) => this.apply(p));
+    // Subscribe exactly once — init() is called again on a config reload.
+    if (!this.wired) {
+      this.wired = true;
+      bus.on("device:patch", (p) => this.apply(p));
+    }
   }
 
   private apply(patch: DevicePatch) {

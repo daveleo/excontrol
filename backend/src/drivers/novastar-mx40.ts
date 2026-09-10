@@ -1,6 +1,7 @@
 import { BaseDriver } from "./types.js";
 import type { CoexConfig, ZoneConfig } from "../config.js";
-import type { Preset, ZoneState } from "@excontrol/shared";
+import type { Preset, ZoneState, ProbeResult } from "@excontrol/shared";
+import { netReason } from "../setup/neterr.js";
 
 /**
  * NovaStar COEX controllers (MX40 Pro / CX / MX6000 …). HTTP only, port 8001, no auth.
@@ -59,6 +60,38 @@ export class NovastarCoexDriver extends BaseDriver {
       }
       this.online();
     });
+  }
+
+  /** One-shot connection test for the setup wizard. Never polls. */
+  static async probe(cfg: CoexConfig): Promise<ProbeResult> {
+    return new NovastarCoexDriver(cfg).probeOnce();
+  }
+
+  private async probeOnce(): Promise<ProbeResult> {
+    const hp = `${this.c.host}:${this.c.port}`;
+    try {
+      const data = await this.call<{ screens?: CoexScreen[] }>("GET", "/api/v1/screen?isNeedCabinetInfo=1");
+      const screens = data?.screens ?? [];
+      return {
+        ok: true,
+        hint: "ok",
+        detail: screens.length
+          ? `Connected — found ${screens.length} screen${screens.length === 1 ? "" : "s"}.`
+          : "Connected, but the processor reports no screens.",
+        zones: screens.map((s, i) => ({
+          id: `s${i}`,
+          label: (s.screenName || "").trim() || `Screen ${i + 1}`,
+          screenId: s.screenID,
+        })),
+      };
+    } catch (e) {
+      const net = netReason(e, hp);
+      if (net) return { ok: false, ...net };
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/HTTP 404\b/.test(msg))
+        return { ok: false, hint: "bad-response", detail: "Reached the device but it has no COEX API here — is this really a COEX processor (MX40 Pro / CX / MX6000)?" };
+      return { ok: false, hint: "bad-response", detail: `Unexpected response: ${msg}` };
+    }
   }
 
   async setBrightness(zoneId: string, pct: number): Promise<void> {

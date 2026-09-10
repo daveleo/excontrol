@@ -1,6 +1,8 @@
 import { Socket } from "node:net";
 import { BaseDriver } from "./types.js";
 import type { EpsConfig } from "../config.js";
+import type { ProbeResult } from "@excontrol/shared";
+import { netReason } from "../setup/neterr.js";
 
 /**
  * Expromo EPS — plain TCP on :5000.
@@ -38,6 +40,40 @@ export class EpsDriver extends BaseDriver {
   async start(): Promise<void> {
     this.patch({ status: "connecting", zones: [] });
     this.startPolling(() => this.refresh());
+  }
+
+  /** One-shot connection test for the setup wizard. Never polls. */
+  static async probe(cfg: EpsConfig): Promise<ProbeResult> {
+    return new EpsDriver(cfg).probeOnce();
+  }
+
+  private async probeOnce(): Promise<ProbeResult> {
+    const hp = `${this.c.host}:${this.c.port}`;
+    try {
+      const raw = await this.send("POWER_STATUS");
+      const f = parseStatus(raw);
+      if (!("system" in f) && !("state" in f)) {
+        return { ok: false, hint: "bad-response", detail: `${hp} answered, but not like an EPS unit (got "${raw.slice(0, 60)}").` };
+      }
+      const bits = [
+        f.system ? `power ${f.system}` : null,
+        f.state && f.state !== f.system ? f.state.toLowerCase().replace(/_/g, " ") : null,
+        f.outputs ? `outputs ${f.outputs}` : null,
+      ].filter(Boolean);
+      return {
+        ok: true,
+        hint: "ok",
+        detail: "Connected to the EPS unit.",
+        info: [f.label, bits.join(", ")].filter(Boolean).join(" — ") || undefined,
+      };
+    } catch (e) {
+      const net = netReason(e, hp);
+      if (net) return { ok: false, ...net };
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/EPS timeout/.test(msg))
+        return { ok: false, hint: "unreachable", detail: `${hp} accepted the connection but never replied — check that this is an EPS unit on port 5000.` };
+      return { ok: false, hint: "bad-response", detail: `Unexpected error talking to ${hp}: ${msg}` };
+    }
   }
 
   async action(name: string): Promise<string> {

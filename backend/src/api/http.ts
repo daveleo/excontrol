@@ -3,13 +3,19 @@ import { dirname, resolve } from "node:path";
 import { existsSync } from "node:fs";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
-import type { SetBrightnessBody, RecallPresetBody, SetBlackoutBody, AppPreset, ScheduleEntry } from "@excontrol/shared";
+import type {
+  SetBrightnessBody, RecallPresetBody, SetBlackoutBody, AppPreset, ScheduleEntry,
+  SetupDevice, SetupSaveBody,
+} from "@excontrol/shared";
 import { store } from "../core/state.js";
-import { getDriver } from "../core/registry.js";
+import { getDriver, restartDevices } from "../core/registry.js";
 import { bus } from "../core/bus.js";
 import { getPresets, savePreset, deletePreset, applyPreset } from "../core/presets.js";
 import { getSchedule, setEntries, snooze } from "../core/schedule.js";
 import { powerDomain } from "../core/power.js";
+import { toSetupState, applySetup, getConfig } from "../config.js";
+import { probeDevice } from "../setup/probe.js";
+import { scanSubnets, localSubnets } from "../setup/scan.js";
 import { log } from "../logger.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -128,6 +134,42 @@ export async function buildHttp() {
   app.post<{ Body: { hours?: number; clear?: boolean } }>("/api/schedule/snooze", async (req) => {
     const { hours = 1, clear = false } = req.body ?? {};
     return snooze(Number(hours), Boolean(clear));
+  });
+
+  /* ---- setup wizard ---- */
+
+  app.get("/api/setup/state", async () => toSetupState());
+
+  app.post<{ Body: SetupDevice }>("/api/setup/probe", async (req, reply) => {
+    if (!req.body?.type) return reply.code(400).send({ error: "device required" });
+    try {
+      return await probeDevice(req.body);
+    } catch (e) {
+      return fail(reply, 500, e);
+    }
+  });
+
+  app.get("/api/setup/scan", async (_req, reply) => {
+    const nets = localSubnets();
+    if (!nets.length) return reply.code(400).send({ error: "this machine has no LAN interface to scan" });
+    try {
+      return { subnets: nets, hits: await scanSubnets() };
+    } catch (e) {
+      return fail(reply, 500, e);
+    }
+  });
+
+  app.post<{ Body: SetupSaveBody }>("/api/setup/save", async (req, reply) => {
+    if (!Array.isArray(req.body?.devices)) return reply.code(400).send({ error: "devices[] required" });
+    let cfg;
+    try {
+      cfg = applySetup(req.body);
+    } catch (e) {
+      return fail(reply, 400, e);
+    }
+    await restartDevices(cfg);
+    bus.emit("broadcast", { t: "toast", level: "info", text: "Configuration saved" });
+    return { ok: true, configured: getConfig().devices.length > 0 };
   });
 
   /* ---- misc ---- */

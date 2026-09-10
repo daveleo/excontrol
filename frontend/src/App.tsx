@@ -6,14 +6,17 @@ import { PresetsPanel } from "./components/PresetsPanel.js";
 import { SchedulerPanel } from "./components/SchedulerPanel.js";
 import { ScheduleCard } from "./components/ScheduleCard.js";
 import { ShutdownModal } from "./components/ShutdownModal.js";
+import { SetupWizardLoader } from "./components/SetupWizard.js";
 
 export function App() {
   const { state, connected, toasts, dismiss } = useShowroom();
-  const [panel, setPanel] = useState<null | "presets" | "schedule">(null);
+  const [panel, setPanel] = useState<null | "presets" | "schedule" | "devices">(null);
 
   const scheduleCount = state?.schedule.entries.filter((e) => e.enabled).length ?? 0;
   const domainLevel = (deviceId: string) =>
     state?.powerDomains.find((d) => d.members.includes(deviceId))?.level;
+
+  const firstRun = !!state && !state.app.configured;
 
   return (
     <div className="app">
@@ -23,13 +26,25 @@ export function App() {
           {state?.app.name ?? "eXcontrol"}
         </div>
         <div className="toolbar">
-          <button className="text-btn" disabled={!state} onClick={() => setPanel(panel === "presets" ? null : "presets")}>
+          <button
+            className="text-btn"
+            disabled={!state}
+            onClick={() => setPanel(panel === "devices" ? null : "devices")}
+          >
+            Devices
+          </button>
+          <button
+            className="text-btn"
+            disabled={!state || firstRun}
+            onClick={() => setPanel(panel === "presets" ? null : "presets")}
+          >
             Presets
           </button>
           <button
             className="icon-btn"
             title="Scheduler"
             aria-label="Scheduler"
+            disabled={firstRun}
             onClick={() => setPanel(panel === "schedule" ? null : "schedule")}
           >
             <ClockIcon />
@@ -41,28 +56,28 @@ export function App() {
 
       {!state && <p className="loading">Connecting…</p>}
 
-      {state && !state.app.configured && (
-        <div className="setup-needed">
-          <h2>No devices configured yet</h2>
-          <p>Add your NovaStar controllers, EPS units and OBS in <code>excontrol.config.json</code> (the
-          setup wizard lands next). See <code>config/excontrol.config.example.json</code>.</p>
-        </div>
+      {firstRun && <SetupWizardLoader onClose={() => setPanel(null)} />}
+
+      {state && !firstRun && (
+        <>
+          <PowerBanner domains={state.powerDomains} />
+
+          <main className="grid">
+            {state.devices.map((d) => (
+              <DeviceCard key={d.id} device={d} powerLevel={domainLevel(d.id)} />
+            ))}
+            {(state.schedule.entries.length > 0 || scheduleCount > 0) && (
+              <ScheduleCard schedule={state.schedule} />
+            )}
+          </main>
+
+          <ShutdownModal schedule={state.schedule} />
+          {panel === "presets" && <PresetsPanel state={state} onClose={() => setPanel(null)} />}
+          {panel === "schedule" && <SchedulerPanel state={state} onClose={() => setPanel(null)} />}
+        </>
       )}
 
-      {state && <PowerBanner domains={state.powerDomains} />}
-
-      <main className="grid">
-        {state?.devices.map((d) => (
-          <DeviceCard key={d.id} device={d} powerLevel={domainLevel(d.id)} />
-        ))}
-        {state && (state.schedule.entries.length > 0 || scheduleCount > 0) && (
-          <ScheduleCard schedule={state.schedule} />
-        )}
-      </main>
-
-      {state && <ShutdownModal schedule={state.schedule} />}
-      {state && panel === "presets" && <PresetsPanel state={state} onClose={() => setPanel(null)} />}
-      {state && panel === "schedule" && <SchedulerPanel state={state} onClose={() => setPanel(null)} />}
+      {state && !firstRun && panel === "devices" && <SetupWizardLoader onClose={() => setPanel(null)} />}
 
       <div className="toasts">
         {toasts.map((t) => (

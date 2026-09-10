@@ -3,6 +3,7 @@
  */
 export * from "./branding.js";
 export * from "./schedule.js";
+export * from "./setup.js";
 
 /* ---------- devices ---------- */
 
