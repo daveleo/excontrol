@@ -35,7 +35,7 @@ export function deletePreset(id: string): void {
 }
 
 /** [deviceId, zoneId?] from "dev" or "dev:zone" */
-function splitTarget(target: string): [string, string | undefined] {
+export function splitTarget(target: string): [string, string | undefined] {
   const i = target.indexOf(":");
   return i < 0 ? [target, undefined] : [target.slice(0, i), target.slice(i + 1)];
 }

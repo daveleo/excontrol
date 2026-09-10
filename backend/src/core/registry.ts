@@ -58,6 +58,15 @@ export async function stopDevices(): Promise<void> {
   drivers.clear();
 }
 
+/** test-only: inject a fake driver so preset / power code can resolve it without a socket */
+export function _setDriverForTest(driver: Driver): void {
+  drivers.set(driver.id, driver);
+}
+/** test-only: drop all registered drivers */
+export function _clearDriversForTest(): void {
+  drivers.clear();
+}
+
 /** Tear down every driver and bring the set back up from a new config (setup wizard save). */
 export async function restartDevices(cfg: AppConfig): Promise<void> {
   log.info({ devices: cfg.devices.map((d) => d.id) }, "restarting devices after config change");
