@@ -41,11 +41,33 @@
   H/COEX success + status-code paths still to confirm against a powered-on room.
 - Network discovery is a TCP port sweep, not NovaStar UDP broadcast (protocol unknown).
 
+## Hardening (ongoing, alongside the phases)
+
+- **Test suite**: 2 → 69 tests — schedule math, config validation + secret redaction,
+  the power-domain state machine (every branch) incl. multi-EPS, preset application, and
+  every driver's `probe()` error decoding against fake servers. Test files are type-checked.
+- **Fixed** (found by hardware + review): power domain now shows "starting up" (not a
+  fault) when eXcontrol boots next to an already-on wall; `deletePreset` disables schedule
+  entries that referenced it; wizard re-points `poweredBy` on an EPS rename; brightness
+  slider debounces keyboard input.
+
 ## Phase 4 — update checker
 
 - `electron-updater` against public GitHub Releases (no token, `autoDownload: false`).
+  Needs a release process first (tag + CI or `electron-builder --publish` to attach the
+  installer **and** `latest.yml` to a GitHub Release).
 - On launch + manual "Check for updates": **Install now / Skip this version / Remind me
   later**. Unsigned build → SmartScreen "More info → Run anyway" (documented).
+
+## Known gaps / decisions pending
+
+- **LAN exposure**: `/api/setup/save`, `/api/power`, preset + schedule writes have no auth
+  and the server binds `0.0.0.0` — any device on the network can reconfigure the install.
+- Changing `app.httpPort` in the wizard needs a full app restart (drivers restart in
+  process; the HTTP listener does not rebind).
+- Default Electron icon everywhere (taskbar, tray, installer).
+- Subnet scan sweeps every LAN interface incl. Tailscale/virtual adapters.
+- Multi-H / multi-EPS: covered by simulation tests, never run on real multi-device hardware.
 
 ## Phase 5 — portability & support
 
