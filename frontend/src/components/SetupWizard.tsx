@@ -18,7 +18,16 @@ const HAS_ZONES = (t: DeviceType) => t === "novastar-h" || t === "novastar-coex"
 
 type ProbeCache = Record<string, { pending?: boolean; result?: ProbeResult }>;
 
-export function SetupWizard({ initial, onClose }: { initial: SetupState; onClose: () => void }) {
+export function SetupWizard({
+  initial,
+  onClose,
+  epsOff = new Set(),
+}: {
+  initial: SetupState;
+  onClose: () => void;
+  /** ids of EPS devices currently powered off — a failed Test on their equipment is expected */
+  epsOff?: Set<string>;
+}) {
   const [app, setApp] = useState(initial.app);
   const [devices, setDevices] = useState<SetupDevice[]>(initial.devices);
   const [probes, setProbes] = useState<ProbeCache>({});
@@ -186,6 +195,7 @@ export function SetupWizard({ initial, onClose }: { initial: SetupState; onClose
               onRemove={() => removeDevice(idx)}
               onTest={() => runProbe(idx)}
               defaultPort={defaultPort(d.type)}
+              powerOff={!!d.poweredBy && epsOff.has(d.poweredBy)}
             />
           ))}
         </div>
@@ -221,7 +231,7 @@ function AddDevice({ onAdd }: { onAdd: (t: DeviceType) => void }) {
 }
 
 function DeviceForm({
-  d, epsDevices, probe, onChange, onRemove, onTest, defaultPort,
+  d, epsDevices, probe, onChange, onRemove, onTest, defaultPort, powerOff,
 }: {
   d: SetupDevice;
   epsDevices: SetupDevice[];
@@ -230,6 +240,7 @@ function DeviceForm({
   onRemove: () => void;
   onTest: () => void;
   defaultPort: number;
+  powerOff?: boolean;
 }) {
   const [showKeyHelp, setShowKeyHelp] = useState(false);
   const zones = d.zones ?? [];
@@ -370,13 +381,16 @@ function DeviceForm({
             {result.ok ? "✓ " : "✗ "}{result.detail}{result.info ? ` (${result.info})` : ""}
           </span>
         )}
+        {!result && powerOff && d.type !== "expromo-eps" && (
+          <span className="muted small">Its power unit is off — this will only connect once the equipment is powered on.</span>
+        )}
       </div>
     </div>
   );
 }
 
 /** Fetches setup state on demand and renders the wizard. Used for the re-openable "Devices" panel. */
-export function SetupWizardLoader({ onClose }: { onClose: () => void }) {
+export function SetupWizardLoader({ onClose, epsOff }: { onClose: () => void; epsOff?: Set<string> }) {
   const [state, setState] = useState<SetupState | null>(null);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => {
@@ -384,5 +398,5 @@ export function SetupWizardLoader({ onClose }: { onClose: () => void }) {
   }, []);
   if (err) return <div className="wizard"><div className="wiz-inner"><p className="probe-bad">{err}</p><button onClick={onClose}>Close</button></div></div>;
   if (!state) return <div className="wizard"><div className="wiz-inner"><p className="muted">Loading…</p></div></div>;
-  return <SetupWizard initial={state} onClose={onClose} />;
+  return <SetupWizard initial={state} onClose={onClose} epsOff={epsOff} />;
 }

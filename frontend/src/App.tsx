@@ -17,6 +17,9 @@ export function App() {
     state?.powerDomains.find((d) => d.members.includes(deviceId))?.level;
 
   const firstRun = !!state && !state.app.configured;
+  const epsOff = new Set(
+    (state?.powerDomains ?? []).filter((d) => d.level === "off").map((d) => d.id),
+  );
 
   return (
     <div className="app">
@@ -56,7 +59,7 @@ export function App() {
 
       {!state && <p className="loading">Connecting…</p>}
 
-      {firstRun && <SetupWizardLoader onClose={() => setPanel(null)} />}
+      {firstRun && <SetupWizardLoader onClose={() => setPanel(null)} epsOff={epsOff} />}
 
       {state && !firstRun && (
         <>
@@ -77,7 +80,7 @@ export function App() {
         </>
       )}
 
-      {state && !firstRun && panel === "devices" && <SetupWizardLoader onClose={() => setPanel(null)} />}
+      {state && !firstRun && panel === "devices" && <SetupWizardLoader onClose={() => setPanel(null)} epsOff={epsOff} />}
 
       <div className="toasts">
         {toasts.map((t) => (

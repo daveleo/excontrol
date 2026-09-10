@@ -44,15 +44,15 @@ export class ObsDriver extends BaseDriver {
   static async probe(cfg: ObsConfig): Promise<ProbeResult> {
     const hp = `${cfg.host}:${cfg.port}`;
     const obs = new OBSWebSocket();
+    let timer: NodeJS.Timeout | undefined;
     try {
       // obs-websocket's connect() has no timeout of its own — a dropped SYN would hang it.
-      const timeout = new Promise<never>((_, rej) =>
-        setTimeout(() => rej(new Error("timed out connecting")), 6000),
-      );
-      const { obsWebSocketVersion } = await Promise.race([
-        obs.connect(`ws://${cfg.host}:${cfg.port}`, cfg.password || undefined, { rpcVersion: 1 }),
-        timeout,
-      ]);
+      const timeout = new Promise<never>((_, rej) => {
+        timer = setTimeout(() => rej(new Error("timed out connecting")), 6000);
+      });
+      const connectP = obs.connect(`ws://${cfg.host}:${cfg.port}`, cfg.password || undefined, { rpcVersion: 1 });
+      connectP.catch(() => {}); // if the race is already lost, don't surface a late unhandled rejection
+      const { obsWebSocketVersion } = await Promise.race([connectP, timeout]);
       const { scenes } = await obs.call("GetSceneList");
       return {
         ok: true,
@@ -71,6 +71,7 @@ export class ObsDriver extends BaseDriver {
         return { ok: false, hint: "unreachable", detail: `Could not reach the OBS WebSocket server at ${hp}. In OBS, enable Tools → WebSocket Server Settings and check the port.` };
       return { ok: false, hint: "bad-response", detail: `Could not connect to OBS: ${msg}` };
     } finally {
+      if (timer) clearTimeout(timer);
       try { await obs.disconnect(); } catch { /* already down */ }
     }
   }
