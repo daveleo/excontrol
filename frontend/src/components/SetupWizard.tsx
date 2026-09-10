@@ -44,11 +44,9 @@ export function SetupWizard({ initial, onClose }: { initial: SetupState; onClose
     setDevices((ds) => ds.map((d, i) => (i === idx ? { ...d, ...patch } : d)));
 
   const freshId = (type: DeviceType, taken: Set<string>) => {
-    const stem = type === "obs" ? "obs" : TYPE_SHORT[type].toLowerCase().replace(/[^a-z0-9]/g, "");
-    for (let n = 1; ; n++) {
-      const id = n === 1 && type === "obs" ? "obs" : `${stem}-${n}`;
-      if (!taken.has(id)) return id;
-    }
+    const stem = { "novastar-h": "h", "novastar-coex": "coex", "expromo-eps": "eps", obs: "obs" }[type];
+    if (!taken.has(stem)) return stem;
+    for (let n = 2; ; n++) if (!taken.has(`${stem}-${n}`)) return `${stem}-${n}`;
   };
 
   const addDevice = (type: DeviceType, host = "") => {
