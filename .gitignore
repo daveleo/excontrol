@@ -1,0 +1,17 @@
+node_modules/
+dist/
+build/
+release/
+out/
+*.log
+logs/
+.env
+.env.local
+.DS_Store
+.vite/
+coverage/
+*.tsbuildinfo
+
+# runtime config written by the setup wizard / on the control PC — never committed
+config/excontrol.config.json
+config/*.local.json

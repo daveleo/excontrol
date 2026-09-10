@@ -1,0 +1,76 @@
+{
+  "$comment": "Example config. The real file is config/excontrol.config.json (or %ProgramData%\\eXcontrol\\excontrol.config.json in production) and is written by the setup wizard — it is gitignored. Every device is optional; you can have any number of each type.",
+
+  "app": { "name": "eXcontrol", "httpPort": 8080, "bind": "0.0.0.0" },
+
+  "devices": [
+    {
+      "id": "h-main",
+      "type": "novastar-h",
+      "label": "Main Wall",
+      "enabled": true,
+      "host": "10.0.0.10",
+      "port": 8000,
+      "pId": "YOUR_OPENAPI_PROJECT_ID",
+      "secretKey": "YOUR_OPENAPI_SECRET",
+      "encrypted": false,
+      "poweredBy": "eps-1",
+      "zones": [
+        { "id": "z1", "label": "Main", "screenId": 0 }
+      ]
+    },
+    {
+      "id": "eps-1",
+      "type": "expromo-eps",
+      "label": "Power",
+      "enabled": true,
+      "host": "10.0.0.20",
+      "port": 5000
+    },
+    {
+      "id": "coex-1",
+      "type": "novastar-coex",
+      "label": "COEX Processor",
+      "enabled": false,
+      "host": "10.0.0.15",
+      "port": 8001,
+      "poweredBy": "eps-1",
+      "zones": []
+    },
+    {
+      "id": "obs",
+      "type": "obs",
+      "label": "OBS",
+      "enabled": false,
+      "host": "127.0.0.1",
+      "port": 4455,
+      "password": "YOUR_OBS_WEBSOCKET_PASSWORD"
+    }
+  ],
+
+  "presets": [
+    {
+      "id": "standard",
+      "label": "Standard",
+      "actions": [
+        { "target": "h-main:z1", "brightness": 50 },
+        { "target": "obs", "scene": "Idle" }
+      ],
+      "powerOnDefaultFor": "all"
+    }
+  ],
+
+  "schedule": {
+    "entries": [
+      {
+        "id": "evening-off",
+        "label": "Evening power off",
+        "time": "17:00",
+        "days": [1, 2, 3, 4, 5],
+        "action": "power_off",
+        "target": "all",
+        "enabled": false
+      }
+    ]
+  }
+}
