@@ -3,6 +3,10 @@ dist/
 build/
 release/
 out/
+
+# electron-builder buildResources dir — committed (installer.nsh, icons)
+!desktop/build/
+!desktop/build/**
 *.log
 logs/
 .env

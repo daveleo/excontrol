@@ -11,13 +11,18 @@
 - Scheduler actions: `power_on` / `power_off` / `apply_preset`, per power unit or all.
 - Front-end renders whatever is configured; light + dark themes.
 
-## Phase 2 — Electron shell
+## Phase 2 — Electron shell  ✅
 
 - `desktop/` workspace; server runs in the Electron main process.
 - Tray icon (Open control panel / Check for updates / Quit), normal resizable window,
   single-instance lock.
-- `electron-builder` → NSIS installer: auto-launch on login, Windows Firewall rule,
-  config in `%ProgramData%\eXcontrol\`. Replaces the pm2 / scheduled-task deployment.
+- `electron-builder` → NSIS installer (`eXcontrol-Setup-<version>.exe`), per-machine;
+  `build/installer.nsh` writes `HKLM\…\Run\eXcontrol` (auto-launch at any user login)
+  and an inbound Windows Firewall rule for the app — both removed on uninstall.
+  Config in `%ProgramData%\eXcontrol\`. Replaces the pm2 / scheduled-task deployment.
+- Validated on CBLATest (Win10 1607): silent `/S` install → Run key + firewall rule
+  present, app serves all four showroom devices from `C:\Program Files\eXcontrol\`.
+- Open: custom app icon (still the default Electron icon); unsigned → SmartScreen.
 
 ## Phase 3 — setup wizard
 

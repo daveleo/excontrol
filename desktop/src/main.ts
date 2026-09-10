@@ -111,7 +111,7 @@ async function main(): Promise<void> {
   app.setAppUserModelId("tech.expromo.excontrol");
 
   await app.whenReady();
-  if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: true });
+  // Autostart is registered by the installer (HKLM Run) — no app-side login item.
 
   try {
     server = await startServer();
