@@ -45,12 +45,14 @@ export class ObsDriver extends BaseDriver {
     const hp = `${cfg.host}:${cfg.port}`;
     const obs = new OBSWebSocket();
     try {
-      const { obsWebSocketVersion, negotiatedRpcVersion } = await obs.connect(
-        `ws://${cfg.host}:${cfg.port}`,
-        cfg.password || undefined,
-        { rpcVersion: 1 },
+      // obs-websocket's connect() has no timeout of its own — a dropped SYN would hang it.
+      const timeout = new Promise<never>((_, rej) =>
+        setTimeout(() => rej(new Error("timed out connecting")), 6000),
       );
-      void negotiatedRpcVersion;
+      const { obsWebSocketVersion } = await Promise.race([
+        obs.connect(`ws://${cfg.host}:${cfg.port}`, cfg.password || undefined, { rpcVersion: 1 }),
+        timeout,
+      ]);
       const { scenes } = await obs.call("GetSceneList");
       return {
         ok: true,
@@ -65,7 +67,7 @@ export class ObsDriver extends BaseDriver {
         return { ok: false, hint: "auth", detail: "OBS rejected the password. Copy it from OBS → Tools → WebSocket Server Settings → Show Connect Info." };
       if (/4008|password is required|missing.*auth/i.test(msg))
         return { ok: false, hint: "auth", detail: "OBS requires a password but none was given — get it from OBS → Tools → WebSocket Server Settings." };
-      if (/ECONNREFUSED|failed to connect|WebSocket.*(closed|error)|1006/i.test(msg))
+      if (/ECONNREFUSED|failed to connect|timed out|WebSocket.*(closed|error)|1006/i.test(msg))
         return { ok: false, hint: "unreachable", detail: `Could not reach the OBS WebSocket server at ${hp}. In OBS, enable Tools → WebSocket Server Settings and check the port.` };
       return { ok: false, hint: "bad-response", detail: `Could not connect to OBS: ${msg}` };
     } finally {
