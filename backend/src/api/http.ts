@@ -13,10 +13,13 @@ import { powerDomain } from "../core/power.js";
 import { log } from "../logger.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const frontendDist = resolve(here, "../../../frontend/dist");
 
 export async function buildHttp() {
   const app = Fastify({ logger: false });
+  // In the Electron build the front-end is packaged elsewhere; the main process points here.
+  const frontendDist = process.env.EXCONTROL_FRONTEND_DIR
+    ? resolve(process.env.EXCONTROL_FRONTEND_DIR)
+    : resolve(here, "../../../frontend/dist");
 
   const fail = (reply: any, code: number, e: unknown) =>
     reply.code(code).send({ error: String(e instanceof Error ? e.message : e) });

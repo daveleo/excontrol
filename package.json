@@ -7,7 +7,8 @@
   "workspaces": [
     "shared",
     "backend",
-    "frontend"
+    "frontend",
+    "desktop"
   ],
   "engines": {
     "node": ">=22"
@@ -17,8 +18,10 @@
     "dev:backend": "npm run dev --workspace backend",
     "dev:frontend": "npm run dev --workspace frontend",
     "build": "npm run build --workspace shared && npm run build --workspace backend && npm run build --workspace frontend",
-    "start": "node backend/dist/index.js",
+    "start": "node backend/dist/cli.js",
     "test": "npm run test --workspace backend",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "desktop:start": "npm run build && npm run start --workspace desktop",
+    "desktop:dist": "npm run build && npm run dist --workspace desktop"
   }
 }

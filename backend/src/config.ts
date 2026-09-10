@@ -8,15 +8,17 @@ import { log } from "./logger.js";
 const here = dirname(fileURLToPath(import.meta.url));
 
 /**
- * Where the runtime config + logs live.
- * - Electron / production: set `EXCONTROL_DATA_DIR` (e.g. %ProgramData%\eXcontrol).
+ * Where the runtime config + logs live. Resolved lazily so the Electron main can set
+ * `EXCONTROL_DATA_DIR` after its imports have loaded.
+ * - Electron / production: `EXCONTROL_DATA_DIR` (e.g. %ProgramData%\eXcontrol).
  * - Dev: the repo's `config/` folder.
  */
-export const dataDir = process.env.EXCONTROL_DATA_DIR
-  ? resolve(process.env.EXCONTROL_DATA_DIR)
-  : resolve(here, "../../config");
-
-const CONFIG_FILE = join(dataDir, `${BRAND.slug}.config.json`);
+export function getDataDir(): string {
+  return process.env.EXCONTROL_DATA_DIR
+    ? resolve(process.env.EXCONTROL_DATA_DIR)
+    : resolve(here, "../../config");
+}
+const configFile = () => join(getDataDir(), `${BRAND.slug}.config.json`);
 
 /* ---------- config schema ---------- */
 
@@ -85,17 +87,18 @@ const EMPTY_CONFIG: AppConfig = {
 let current: AppConfig = EMPTY_CONFIG;
 
 export function loadConfig(): AppConfig {
-  mkdirSync(dataDir, { recursive: true });
-  if (!existsSync(CONFIG_FILE)) {
-    log.warn({ file: CONFIG_FILE }, "no config yet — starting unconfigured (setup wizard)");
+  const dir = getDataDir();
+  const file = configFile();
+  mkdirSync(dir, { recursive: true });
+  if (!existsSync(file)) {
+    log.warn({ file }, "no config yet — starting unconfigured (setup wizard)");
     current = structuredClone(EMPTY_CONFIG);
     return current;
   }
   try {
-    const parsed = JSON.parse(readFileSync(CONFIG_FILE, "utf8")) as Partial<AppConfig>;
-    current = normalise(parsed);
+    current = normalise(JSON.parse(readFileSync(file, "utf8")) as Partial<AppConfig>);
   } catch (e) {
-    log.error({ err: e, file: CONFIG_FILE }, "config unreadable — starting unconfigured");
+    log.error({ err: e, file }, "config unreadable — starting unconfigured");
     current = structuredClone(EMPTY_CONFIG);
   }
   validate(current);
@@ -110,13 +113,14 @@ export function getConfig(): AppConfig {
 export function saveConfig(next: AppConfig): AppConfig {
   validate(next);
   current = next;
+  const file = configFile();
   try {
-    mkdirSync(dataDir, { recursive: true });
-    const tmp = CONFIG_FILE + ".tmp";
+    mkdirSync(getDataDir(), { recursive: true });
+    const tmp = file + ".tmp";
     writeFileSync(tmp, JSON.stringify(next, null, 2));
-    renameSync(tmp, CONFIG_FILE);
+    renameSync(tmp, file);
   } catch (e) {
-    log.error({ err: e, file: CONFIG_FILE }, "failed to persist config");
+    log.error({ err: e, file }, "failed to persist config");
   }
   return current;
 }

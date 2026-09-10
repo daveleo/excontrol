@@ -1,4 +1,3 @@
-import { fileURLToPath } from "node:url";
 import { loadConfig } from "./config.js";
 import { log } from "./logger.js";
 import { startDevices, stopDevices } from "./core/registry.js";
@@ -14,7 +13,7 @@ export interface RunningServer {
   stop: () => Promise<void>;
 }
 
-/** Boot the whole backend. Electron calls this in its main process; the CLI calls it below. */
+/** Boot the whole backend. Electron's main process calls this; so does the CLI (cli.ts). */
 export async function startServer(): Promise<RunningServer> {
   const cfg = loadConfig();
   log.info({ devices: cfg.devices.map((d) => d.id), configured: cfg.devices.length > 0 }, `${BRAND.name} starting`);
@@ -39,23 +38,4 @@ export async function startServer(): Promise<RunningServer> {
       await stopDevices();
     },
   };
-}
-
-// CLI entry (dev / `npm start`) — not used when embedded in Electron.
-const isMain = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
-if (isMain) {
-  startServer()
-    .then((srv) => {
-      const shutdown = async (sig: string) => {
-        log.info({ sig }, "shutting down");
-        await srv.stop();
-        process.exit(0);
-      };
-      process.on("SIGINT", () => void shutdown("SIGINT"));
-      process.on("SIGTERM", () => void shutdown("SIGTERM"));
-    })
-    .catch((e) => {
-      log.error({ err: e }, "fatal");
-      process.exit(1);
-    });
 }

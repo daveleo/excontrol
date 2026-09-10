@@ -15,3 +15,5 @@ coverage/
 # runtime config written by the setup wizard / on the control PC — never committed
 config/excontrol.config.json
 config/*.local.json
+desktop/release/
+desktop/out/

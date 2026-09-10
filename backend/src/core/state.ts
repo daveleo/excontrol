@@ -9,6 +9,7 @@ import { log } from "../logger.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 function pkgVersion(): string {
+  if (process.env.EXCONTROL_VERSION) return process.env.EXCONTROL_VERSION;
   try {
     return JSON.parse(readFileSync(resolve(here, "../../package.json"), "utf8")).version ?? "0.0.0";
   } catch {
@@ -24,8 +25,11 @@ class Store {
   private devices = new Map<string, DeviceState>();
   private domains = new Map<string, PowerDomain>();
   readonly startedAt = Date.now();
-  readonly version = pkgVersion();
   updatesPaused = false;
+
+  get version(): string {
+    return pkgVersion();
+  }
 
   init(seed: DeviceState[]) {
     this.devices.clear();

@@ -1,0 +1,51 @@
+{
+  "name": "@excontrol/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "eXcontrol desktop app (Electron)",
+  "author": "Expromo",
+  "license": "MIT",
+  "type": "module",
+  "main": "out/main.mjs",
+  "scripts": {
+    "bundle": "node esbuild.mjs",
+    "start": "npm run bundle && electron .",
+    "dist": "npm run bundle && electron-builder --win --publish never",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@excontrol/backend": "*",
+    "@excontrol/frontend": "*",
+    "@types/node": "^22.9.0",
+    "electron": "31.7.7",
+    "electron-builder": "^25.1.8",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.3"
+  },
+  "build": {
+    "appId": "tech.expromo.excontrol",
+    "productName": "eXcontrol",
+    "copyright": "Copyright 2026 Expromo",
+    "electronVersion": "31.7.7",
+    "directories": { "output": "release", "buildResources": "build" },
+    "files": ["out/**/*", "package.json"],
+    "extraResources": [
+      { "from": "../frontend/dist", "to": "frontend" },
+      { "from": "../config/excontrol.config.example.json", "to": "excontrol.config.example.json" }
+    ],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "artifactName": "eXcontrol-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": true
+    },
+    "publish": { "provider": "github", "owner": "daveleo", "repo": "excontrol" }
+  }
+}
