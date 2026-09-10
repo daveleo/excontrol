@@ -110,7 +110,6 @@ function recompute(): void {
     if (dom.level === "off" || dom.level === "starting") r.applyArmed = true;
     if (r.applyArmed && dom.level === "on" && (r.prevLevel === "off" || r.prevLevel === "starting")) {
       r.applyArmed = false;
-      log.info({ epsId: eps.id, from: r.prevLevel, members: dom.members }, "power domain -> ON, applying power-on presets");
       void applyPowerOnDefaults(eps.id, dom.members).catch((e) => log.error({ err: e }, "power-on preset failed"));
     }
     r.prevLevel = dom.level;
@@ -132,14 +131,20 @@ function recompute(): void {
   if (changed.length) bus.emit("broadcast", { t: "power", domains: store.domainsList() });
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 async function applyPowerOnDefaults(epsId: string, memberIds: string[]): Promise<void> {
   const only = new Set(memberIds);
   const presets = getPresets().filter((p) => p.powerOnDefaultFor === epsId || p.powerOnDefaultFor === "all");
-  log.info(
-    { epsId, matched: presets.map((p) => p.label), allPresets: getPresets().map((p) => `${p.label}:${p.powerOnDefaultFor}`) },
-    "power-on presets to apply",
-  );
+  if (!presets.length) return;
+  log.info({ epsId, presets: presets.map((p) => p.label) }, "applying power-on defaults");
+
+  // Controllers keep finalising their own boot state for a few seconds after their API
+  // responds and can overwrite a value set right then — so settle, apply, then apply once more.
+  await sleep(4000);
   for (const p of presets) await applyPreset(p.id, { only });
+  await sleep(9000);
+  for (const p of presets) await applyPreset(p.id, { only, silent: true });
 }
 
 export function startPowerMonitor(): void {

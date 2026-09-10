@@ -64,7 +64,10 @@ async function runAction(a: PresetAction): Promise<void> {
 }
 
 /** Apply a preset. `only` limits it to actions whose device is in that set (power-on scope). */
-export async function applyPreset(id: string, opts: { manual?: boolean; only?: Set<string> } = {}): Promise<void> {
+export async function applyPreset(
+  id: string,
+  opts: { manual?: boolean; only?: Set<string>; silent?: boolean } = {},
+): Promise<void> {
   const preset = getPresets().find((p) => p.id === id);
   if (!preset) {
     if (opts.manual) throw new Error(`no preset "${id}"`);
@@ -77,5 +80,7 @@ export async function applyPreset(id: string, opts: { manual?: boolean; only?: S
 
   const results = await Promise.allSettled(actions.map(runAction));
   const failed = results.filter((r) => r.status === "rejected").length;
-  toast(failed ? "warn" : "info", failed ? `"${preset.label}": ${failed} action(s) failed` : `"${preset.label}" applied`);
+  if (!opts.silent || failed) {
+    toast(failed ? "warn" : "info", failed ? `"${preset.label}": ${failed} action(s) failed` : `"${preset.label}" applied`);
+  }
 }
