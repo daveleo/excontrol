@@ -16,7 +16,10 @@ import { powerDomain } from "../core/power.js";
 import { toSetupState, applySetup, getConfig, isSettingsLocked } from "../config.js";
 import { probeDevice } from "../setup/probe.js";
 import { scanSubnets, localSubnets } from "../setup/scan.js";
-import { checkPassword, setPassword, issueToken, verifyToken, bearerFrom } from "../core/auth.js";
+import {
+  checkPassword, setPassword, issueToken, verifyToken, bearerFrom,
+  loginGate, recordLoginFailure, recordLoginSuccess,
+} from "../core/auth.js";
 import { restartHttpServer } from "../core/httpControl.js";
 import { log } from "../logger.js";
 
@@ -208,7 +211,13 @@ export async function buildHttp() {
   app.get("/api/auth/status", async () => ({ locked: isSettingsLocked() }));
 
   app.post<{ Body: LoginBody }>("/api/auth/login", async (req, reply) => {
-    if (!checkPassword(req.body?.password ?? "")) return reply.code(401).send({ error: "incorrect password" });
+    const gate = loginGate(req.ip);
+    if (!gate.allowed) return reply.code(429).send({ error: `too many attempts — try again in ${gate.retryAfterSec}s` });
+    if (!(await checkPassword(req.body?.password ?? ""))) {
+      recordLoginFailure(req.ip);
+      return reply.code(401).send({ error: "incorrect password" });
+    }
+    recordLoginSuccess(req.ip);
     return { token: issueToken() };
   });
 
@@ -220,10 +229,14 @@ export async function buildHttp() {
     if (isSettingsLocked() && !verifyToken(bearerFrom(req.headers.authorization))) {
       return reply.code(401).send({ error: "settings are locked" });
     }
+    const gate = loginGate(req.ip);
+    if (!gate.allowed) return reply.code(429).send({ error: `too many attempts — try again in ${gate.retryAfterSec}s` });
     try {
-      setPassword(req.body?.newPassword, req.body?.currentPassword);
+      await setPassword(req.body?.newPassword, req.body?.currentPassword);
+      recordLoginSuccess(req.ip);
       return { ok: true, locked: isSettingsLocked() };
     } catch (e) {
+      recordLoginFailure(req.ip);
       return fail(reply, 400, e);
     }
   });

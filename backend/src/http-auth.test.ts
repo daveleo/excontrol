@@ -5,6 +5,7 @@ import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
 import { loadConfig } from "./config.js";
 import { buildHttp } from "./api/http.js";
+import { _resetLoginGateForTest } from "./core/auth.js";
 
 const dirs: string[] = [];
 let app: FastifyInstance;
@@ -15,6 +16,7 @@ beforeEach(async () => {
   process.env.EXCONTROL_DATA_DIR = dir;
   loadConfig();
   app = await buildHttp();
+  _resetLoginGateForTest();
 });
 afterAll(() => {
   for (const d of dirs) try { rmSync(d, { recursive: true, force: true }); } catch { /* ignore */ }
@@ -129,5 +131,42 @@ describe("configurable port", () => {
   it("does not report portChanged when only devices change", async () => {
     const r = await app.inject({ method: "POST", url: "/api/setup/save", ...json({ devices: [] }) });
     expect(r.json()).toMatchObject({ portChanged: false });
+  });
+});
+
+describe("login rate limiting", () => {
+  beforeEach(async () => {
+    await app.inject({ method: "POST", url: "/api/auth/set-password", ...json({ newPassword: "hunter2" }) });
+  });
+
+  it("locks out after 5 failures within the window, and a correct password still fails while locked", async () => {
+    for (let i = 0; i < 5; i++) {
+      const r = await app.inject({ method: "POST", url: "/api/auth/login", ...json({ password: "wrong" }) });
+      expect(r.statusCode).toBe(401);
+    }
+    const locked = await app.inject({ method: "POST", url: "/api/auth/login", ...json({ password: "hunter2" }) });
+    expect(locked.statusCode).toBe(429);
+    expect(locked.json().error).toMatch(/too many attempts/i);
+  });
+
+  it("a successful login clears the failure count", async () => {
+    for (let i = 0; i < 3; i++) {
+      await app.inject({ method: "POST", url: "/api/auth/login", ...json({ password: "wrong" }) });
+    }
+    expect((await app.inject({ method: "POST", url: "/api/auth/login", ...json({ password: "hunter2" }) })).statusCode).toBe(200);
+    // 3 more wrong attempts right after a success shouldn't trip the 5-attempt threshold
+    for (let i = 0; i < 3; i++) {
+      const r = await app.inject({ method: "POST", url: "/api/auth/login", ...json({ password: "wrong" }) });
+      expect(r.statusCode).toBe(401);
+    }
+  });
+
+  it("also gates set-password's current-password check", async () => {
+    const { token } = (await app.inject({ method: "POST", url: "/api/auth/login", ...json({ password: "hunter2" }) })).json();
+    for (let i = 0; i < 5; i++) {
+      await app.inject({ method: "POST", url: "/api/auth/set-password", ...json({ currentPassword: "wrong", newPassword: "x" }, bearer(token)) });
+    }
+    const r = await app.inject({ method: "POST", url: "/api/auth/set-password", ...json({ currentPassword: "hunter2", newPassword: "x" }, bearer(token)) });
+    expect(r.statusCode).toBe(429);
   });
 });
