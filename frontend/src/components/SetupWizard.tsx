@@ -168,8 +168,10 @@ export function SetupWizard({
   if (reconnecting != null) {
     return (
       <div className="wizard">
-        <div className="wiz-inner">
-          <p className="loading">Saved. Reconnecting on port {reconnecting}…</p>
+        <div className="wiz-scroll">
+          <div className="wiz-inner">
+            <p className="loading">Saved. Reconnecting on port {reconnecting}…</p>
+          </div>
         </div>
       </div>
     );
@@ -177,6 +179,7 @@ export function SetupWizard({
 
   return (
     <div className="wizard">
+      <div className="wiz-scroll">
       <div className="wiz-inner">
         <header className="wiz-head">
           <div>
@@ -242,8 +245,11 @@ export function SetupWizard({
         </div>
 
         <AddDevice onAdd={addDevice} />
+      </div>
+      </div>
 
-        <footer className="wiz-foot">
+      <footer className="wiz-foot">
+        <div className="wiz-foot-inner">
           {idError && <span className="probe-bad">{idError}</span>}
           {saveErr && <span className="probe-bad">{saveErr}</span>}
           <div className="spacer" />
@@ -251,8 +257,8 @@ export function SetupWizard({
           <button className="primary" disabled={saving || !!idError || devices.length === 0} onClick={save}>
             {saving ? "Saving…" : initial.configured ? "Save changes" : "Save & start"}
           </button>
-        </footer>
-      </div>
+        </div>
+      </footer>
     </div>
   );
 }
@@ -471,6 +477,9 @@ function DeviceForm({
   powerOff?: boolean;
 }) {
   const [showKeyHelp, setShowKeyHelp] = useState(false);
+  // Collapsed by default so opening Devices gives an overview of everything configured,
+  // not a wall of forms — expand one at a time to edit it.
+  const [collapsed, setCollapsed] = useState(true);
   const zones = d.zones ?? [];
   const result = probe?.result;
 
@@ -498,8 +507,14 @@ function DeviceForm({
   };
 
   return (
-    <div className={`wiz-device ${d.enabled ? "" : "off"}`}>
+    <div className={`wiz-device ${d.enabled ? "" : "off"} ${collapsed ? "collapsed" : ""}`}>
       <div className="wd-top">
+        <button
+          className="wd-toggle" onClick={() => setCollapsed((c) => !c)}
+          aria-label={collapsed ? "Expand" : "Collapse"} aria-expanded={!collapsed}
+        >
+          {collapsed ? "▸" : "▾"}
+        </button>
         <span className="wd-badge">{TYPE_SHORT[d.type]}</span>
         <input
           className="wd-label" value={d.label} placeholder="Friendly name"
@@ -509,6 +524,7 @@ function DeviceForm({
           id
           <input value={d.id} onChange={(e) => onChange({ id: e.target.value.trim() })} />
         </label>
+        {collapsed && <span className="wd-summary muted small">{d.host || "no address"}:{d.port}</span>}
         <label className="toggle">
           <input type="checkbox" checked={d.enabled} onChange={(e) => onChange({ enabled: e.target.checked })} />
           Enabled
@@ -516,6 +532,8 @@ function DeviceForm({
         <button className="wd-remove" onClick={onRemove} aria-label="Remove device">Remove</button>
       </div>
 
+      {!collapsed && (
+      <>
       <div className="wd-grid">
         <label className="field">
           <span>IP address</span>
@@ -668,6 +686,8 @@ function DeviceForm({
           <span className="muted small">Its power unit is off — this will only connect once the equipment is powered on.</span>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }
@@ -679,7 +699,7 @@ export function SetupWizardLoader({ onClose, epsOff }: { onClose: () => void; ep
   useEffect(() => {
     getSetupState().then(setState).catch((e) => setErr(e instanceof Error ? e.message : String(e)));
   }, []);
-  if (err) return <div className="wizard"><div className="wiz-inner"><p className="probe-bad">{err}</p><button onClick={onClose}>Close</button></div></div>;
-  if (!state) return <div className="wizard"><div className="wiz-inner"><p className="muted">Loading…</p></div></div>;
+  if (err) return <div className="wizard"><div className="wiz-scroll"><div className="wiz-inner"><p className="probe-bad">{err}</p><button onClick={onClose}>Close</button></div></div></div>;
+  if (!state) return <div className="wizard"><div className="wiz-scroll"><div className="wiz-inner"><p className="muted">Loading…</p></div></div></div>;
   return <SetupWizard initial={state} onClose={onClose} epsOff={epsOff} />;
 }
