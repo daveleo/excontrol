@@ -108,6 +108,31 @@ describe("savePreset persistence", () => {
     expect(getConfig().presets).toHaveLength(1);
     expect(getConfig().presets[0]!.label).toBe("Renamed");
   });
+
+  it("'default on startup' is exclusive per target — marking a new one un-marks the old", () => {
+    savePreset({ id: "day", label: "Day", actions: [], powerOnDefaultFor: "eps" });
+    savePreset({ id: "night", label: "Night", actions: [], powerOnDefaultFor: "eps" });
+    const presets = getConfig().presets;
+    expect(presets.find((p) => p.id === "day")!.powerOnDefaultFor).toBeNull();
+    expect(presets.find((p) => p.id === "night")!.powerOnDefaultFor).toBe("eps");
+  });
+
+  it("different targets don't clash — one default for a specific EPS, another for 'all'", () => {
+    savePreset({ id: "stage", label: "Stage", actions: [], powerOnDefaultFor: "eps" });
+    savePreset({ id: "global", label: "Global", actions: [], powerOnDefaultFor: "all" });
+    const presets = getConfig().presets;
+    expect(presets.find((p) => p.id === "stage")!.powerOnDefaultFor).toBe("eps");
+    expect(presets.find((p) => p.id === "global")!.powerOnDefaultFor).toBe("all");
+  });
+
+  it("clearing a preset's own default doesn't touch anyone else's", () => {
+    savePreset({ id: "a", label: "A", actions: [], powerOnDefaultFor: "eps" });
+    savePreset({ id: "b", label: "B", actions: [], powerOnDefaultFor: "all" });
+    savePreset({ id: "a", label: "A", actions: [], powerOnDefaultFor: null });
+    const presets = getConfig().presets;
+    expect(presets.find((p) => p.id === "a")!.powerOnDefaultFor).toBeNull();
+    expect(presets.find((p) => p.id === "b")!.powerOnDefaultFor).toBe("all");
+  });
 });
 
 describe("deletePreset", () => {

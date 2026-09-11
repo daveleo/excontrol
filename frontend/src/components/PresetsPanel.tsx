@@ -79,7 +79,8 @@ export function PresetsPanel({ state, onClose }: { state: AppState; onClose: () 
     <Modal title="Presets" onClose={onClose}>
       <p className="modal-lead">
         A preset is a saved look — brightness, presets, blackout and OBS scene across your
-        devices. Apply it with one tap, or set it as the power-on default.
+        devices. Apply it with one tap, or mark one "Default on startup" so it's applied
+        automatically as soon as the power comes on.
       </p>
 
       {state.presets.length === 0 && <p className="hint muted">No presets yet.</p>}
@@ -90,7 +91,7 @@ export function PresetsPanel({ state, onClose }: { state: AppState; onClose: () 
             <b>{p.label}</b>
             <span className="pr-meta">
               {p.actions.length} action{p.actions.length === 1 ? "" : "s"}
-              {p.powerOnDefaultFor ? ` · power-on default` : ""}
+              {p.powerOnDefaultFor ? " · ⭐ default on startup" : ""}
             </span>
           </div>
           <div className="row">
@@ -123,7 +124,8 @@ function PresetEditor({
 }) {
   const rows = useMemo(() => buildRows(state), [state]);
   const [label, setLabel] = useState(preset?.label ?? "");
-  const [powerOn, setPowerOn] = useState<string>(preset?.powerOnDefaultFor ?? "");
+  const [isDefault, setIsDefault] = useState(!!preset?.powerOnDefaultFor);
+  const [defaultTarget, setDefaultTarget] = useState(preset?.powerOnDefaultFor || "all");
   const [saving, setSaving] = useState(false);
 
   // seed per-row action state from the existing preset
@@ -148,7 +150,7 @@ function PresetEditor({
         id: preset?.id,
         label: label.trim() || "Preset",
         actions: Object.values(actions),
-        powerOnDefaultFor: powerOn || null,
+        powerOnDefaultFor: isDefault ? defaultTarget : null,
       });
       onDone();
     } finally {
@@ -220,17 +222,28 @@ function PresetEditor({
       })}
 
       {epsIds.length > 0 && (
-        <label className="field">
-          <span>Apply automatically when power turns on</span>
-          <select value={powerOn} onChange={(e) => setPowerOn(e.target.value)}>
-            <option value="">Never (manual only)</option>
-            <option value="all">Any power unit</option>
-            {epsIds.map((id) => {
-              const d = state.devices.find((x) => x.id === id)!;
-              return <option key={id} value={id}>{d.label}</option>;
-            })}
-          </select>
-        </label>
+        <div className="preset-default">
+          <label className="toggle">
+            <input type="checkbox" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} />
+            <span>⭐ Default on startup</span>
+          </label>
+          {isDefault && epsIds.length > 1 && (
+            <label className="field">
+              <span>Power unit</span>
+              <select value={defaultTarget} onChange={(e) => setDefaultTarget(e.target.value)}>
+                <option value="all">Any power unit</option>
+                {epsIds.map((id) => {
+                  const d = state.devices.find((x) => x.id === id)!;
+                  return <option key={id} value={id}>{d.label}</option>;
+                })}
+              </select>
+            </label>
+          )}
+          <p className="hint muted">
+            Applied automatically as soon as that power unit turns on — replaces whatever preset held
+            this before, there's only ever one startup default per power unit.
+          </p>
+        </div>
       )}
 
       <div className="modal-actions">

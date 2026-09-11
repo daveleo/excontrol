@@ -19,9 +19,16 @@ export function savePreset(p: Partial<AppPreset> & { label: string }): AppPreset
     powerOnDefaultFor: p.powerOnDefaultFor ?? null,
   };
   const idx = cfg.presets.findIndex((x) => x.id === clean.id);
-  const presets = [...cfg.presets];
-  if (idx >= 0) presets[idx] = clean;
-  else presets.push(clean);
+  let presets = idx >= 0 ? cfg.presets.map((x, i) => (i === idx ? clean : x)) : [...cfg.presets, clean];
+  // "Default on startup" is exclusive per target — marking this preset as the default for
+  // an EPS (or "all") un-marks whichever preset held that target before, so there's only
+  // ever one answer to "what's the startup default", matching how V1.0's single fixed
+  // default worked.
+  if (clean.powerOnDefaultFor) {
+    presets = presets.map((x) =>
+      x.id !== clean.id && x.powerOnDefaultFor === clean.powerOnDefaultFor ? { ...x, powerOnDefaultFor: null } : x,
+    );
+  }
   saveConfig({ ...cfg, presets });
   bus.emit("broadcast", { t: "presets", presets });
   return clean;

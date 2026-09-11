@@ -248,6 +248,13 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-si
 .pe-row.on { border-color: var(--accent); }
 .pe-controls { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; font-size: 13px; }
 .pe-controls label { display: flex; align-items: center; gap: 8px; }
+
+.preset-default {
+  display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--accent); border-radius: 9px;
+  padding: 12px; background: var(--accent-soft);
+}
+.preset-default .toggle { font-weight: 600; }
+.preset-default .hint { margin: 0; }
 .pe-controls input[type="range"] { flex: 1; accent-color: var(--accent); }
 
 /* scheduler rows */
