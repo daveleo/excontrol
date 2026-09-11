@@ -30,9 +30,10 @@ Supports **NovaStar H-series** and **COEX** processors, **Expromo EPS** power un
 - **Scheduler** — power on/off or apply a preset on a daily/weekly schedule, with a
   15-minute shutdown countdown and "extend by an hour".
 - **Live** — every open screen shows the same state, updated in seconds, no refresh.
-- **Settings password (optional)** — lock device setup and preset/schedule editing behind
-  a shared password from the Devices screen. Zone control, power and preset *apply* stay
-  open to any phone on the network either way — it only protects reconfiguration.
+- **Access password (optional)** — lock the *entire* control panel behind a shared
+  password from the Devices screen: viewing state, brightness, blackout, power, presets,
+  the schedule, settings, all of it. Nobody without the password sees anything but a login
+  screen.
 - **Integrates with Bitfocus Companion today** via its Generic HTTP module — see
   [`docs/COMPANION.md`](docs/COMPANION.md).
 - **Updates itself** — checks public GitHub Releases on launch and on demand (tray →
@@ -92,14 +93,16 @@ mean every phone has to click through a browser warning once. If an install ever
 be reachable from outside that trusted network, put it behind a VPN/Tailscale rather than
 exposing it directly.
 
-What *is* worth locking down on a shared LAN: reconfiguration. Setting a **settings
-password** (Devices → App settings → Settings password) requires it for the Devices
-screen and for editing presets/schedules; brightness, blackout, power and applying an
-existing preset stay reachable from any phone with no password, by design. The password is
-stored as a salted hash in the config file, never in plaintext. **If it's forgotten**, stop
-the app and delete the `settingsPasswordHash` / `settingsPasswordSalt` keys from
-`excontrol.config.json` — that removes the lock, same as any other local device's
-"physical access resets it" recovery.
+What *is* worth locking down on a shared LAN: who gets to touch the room at all. Setting
+an **access password** (Devices → App settings → Access password) gates the whole
+control panel — the REST API and the live WebSocket feed both require it, so an
+unauthenticated browser gets a login screen and nothing else, not even read-only state.
+It's one shared password, not per-user accounts; a login is a bearer token good for 30
+days, and a per-IP rate limit (5 failures/60s → 30s lockout) caps how fast anyone can
+guess it. The password itself is stored as a salted hash in the config file, never in
+plaintext. **If it's forgotten**, stop the app and delete the `settingsPasswordHash` /
+`settingsPasswordSalt` keys from `excontrol.config.json` — that removes the lock, same as
+any other local device's "physical access resets it" recovery.
 
 The control panel's **port** is configurable from the same App settings section; changing
 it reconnects every open browser to the new port automatically.

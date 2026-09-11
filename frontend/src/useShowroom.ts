@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { ServerMessage, AppState } from "@excontrol/shared";
+import { getToken } from "./lib/auth.js";
 
 export interface Toast {
   id: number;
@@ -16,12 +17,16 @@ interface Hook {
 
 let toastSeq = 0;
 
-/** Subscribes to /ws, keeps a live AppState, auto-reconnects. */
-export function useShowroom(): Hook {
+/** Subscribes to /ws, keeps a live AppState, auto-reconnects. `onUnauthorized` fires if the
+ *  very first connection attempt is rejected outright — the token was verified over REST
+ *  right before this mounted, so that almost certainly means it's since been revoked
+ *  (password changed elsewhere) rather than a normal network blip. */
+export function useShowroom(onUnauthorized?: () => void): Hook {
   const [state, setState] = useState<AppState | null>(null);
   const [connected, setConnected] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const retry = useRef(0);
+  const everOpened = useRef(false);
 
   const dismiss = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), []);
 
@@ -38,14 +43,23 @@ export function useShowroom(): Hook {
 
     const connect = () => {
       const proto = location.protocol === "https:" ? "wss" : "ws";
-      ws = new WebSocket(`${proto}://${location.host}/ws`);
+      const token = getToken();
+      const q = token ? `?token=${encodeURIComponent(token)}` : "";
+      ws = new WebSocket(`${proto}://${location.host}/ws${q}`);
+      let opened = false;
       ws.onopen = () => {
+        opened = true;
+        everOpened.current = true;
         retry.current = 0;
         setConnected(true);
       };
       ws.onclose = () => {
         setConnected(false);
         if (closed) return;
+        if (!opened && !everOpened.current) {
+          onUnauthorized?.();
+          return; // don't keep retrying a handshake that's actively being rejected
+        }
         retry.current = Math.min(retry.current + 1, 6);
         timer = setTimeout(connect, 500 * 2 ** (retry.current - 1));
       };
@@ -80,7 +94,7 @@ export function useShowroom(): Hook {
       clearTimeout(timer);
       ws?.close();
     };
-  }, [pushToast]);
+  }, [pushToast, onUnauthorized]);
 
   return { state, connected, toasts, dismiss };
 }

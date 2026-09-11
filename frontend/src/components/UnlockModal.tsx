@@ -37,9 +37,9 @@ export function UnlockModal() {
   };
 
   return (
-    <Modal title="Settings are locked" onClose={() => resolveUnlock(false)}>
+    <Modal title="Verify password" onClose={() => resolveUnlock(false)}>
       <form onSubmit={submit} className="unlock-form">
-        <p className="modal-lead">Enter the settings password to continue.</p>
+        <p className="modal-lead">Your session needs to re-verify the password to continue.</p>
         <input
           ref={inputRef}
           type="password"

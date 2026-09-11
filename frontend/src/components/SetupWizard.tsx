@@ -268,7 +268,7 @@ function AppSettingsSection({
   return (
     <section className="wiz-app-settings">
       <button className="linkish wiz-app-toggle" onClick={() => setOpen((v) => !v)}>
-        {open ? "▾" : "▸"} App settings — name, port, settings password
+        {open ? "▾" : "▸"} App settings — name, port, access password
       </button>
       {open && (
         <div className="wiz-app-grid">
@@ -336,9 +336,9 @@ function SecurityPassword({ locked, onLockedChange }: { locked: boolean; onLocke
   return (
     <div className="wiz-security">
       <div className="wd-zones-head">
-        <span>Settings password</span>
+        <span>Access password</span>
         <span className="muted small">
-          {locked ? "Set — required to reach Devices, and to edit presets or the schedule." : "Not set — the settings are open to anyone on the network."}
+          {locked ? "Set — the whole control panel requires it, on every device." : "Not set — anyone on the network can open and operate this control panel."}
         </span>
       </div>
 
@@ -371,8 +371,9 @@ function SecurityPassword({ locked, onLockedChange }: { locked: boolean; onLocke
       )}
       {msg && <span className={msg.ok ? "probe-ok" : "probe-bad"}>{msg.text}</span>}
       <p className="hint muted">
-        Zone control, presets and power stay reachable from any phone on the network without this password —
-        it only protects the setup / preset-editing / schedule-editing screens.
+        Locks the entire control panel — viewing state, brightness, blackout, power, presets, the
+        schedule, everything — not just this Devices screen. Anyone without the password sees a
+        login prompt and nothing else.
       </p>
     </div>
   );
@@ -435,7 +436,7 @@ function BackupSection({ locked }: { locked: boolean }) {
       {msg && <span className={msg.ok ? "probe-ok" : "probe-bad"}>{msg.text}</span>}
       <p className="hint muted">
         The exported file has device credentials in plain text — keep it somewhere private. Importing
-        replaces every device, preset and schedule entry here (this install's settings password is kept).
+        replaces every device, preset and schedule entry here (this install's access password is kept).
         Diagnostics redacts secrets and is safe to share with support.
       </p>
     </div>

@@ -40,12 +40,15 @@ export async function buildHttp() {
   const fail = (reply: any, code: number, e: unknown) =>
     reply.code(code).send({ error: String(e instanceof Error ? e.message : e) });
 
-  /** Gate for the config surface (setup, preset & schedule editing) — never applied to
-   *  zone/power/preset-apply control, so any phone on the LAN can still run the room. */
+  /** The one access gate: once a password is set, it protects the whole control surface —
+   *  viewing state, operating devices, presets, schedule — not just settings. Left open
+   *  regardless: /health (ops liveness check, no control), the auth endpoints themselves
+   *  (how would you log in otherwise?), and the static front-end (the login screen has to
+   *  be servable to render at all). */
   const requireAuth = async (req: any, reply: any) => {
     if (!isSettingsLocked()) return;
     if (verifyToken(bearerFrom(req.headers.authorization))) return;
-    return reply.code(401).send({ error: "settings are locked — enter the settings password" });
+    return reply.code(401).send({ error: "locked — enter the password" });
   };
 
   app.get("/health", async () => ({
@@ -55,7 +58,7 @@ export async function buildHttp() {
     devices: store.all().map((d) => ({ id: d.id, status: d.status })),
   }));
 
-  app.get("/api/state", async () => store.snapshot());
+  app.get("/api/state", { preHandler: requireAuth }, async () => store.snapshot());
 
   /* ---- zone-scoped device control ---- */
 
@@ -82,6 +85,7 @@ export async function buildHttp() {
 
   app.post<{ Params: { id: string; zoneId: string }; Body: SetBrightnessBody }>(
     "/api/devices/:id/zones/:zoneId/brightness",
+    { preHandler: requireAuth },
     (req, reply) => {
       const pct = Number(req.body?.brightness);
       if (!Number.isFinite(pct) || pct < 0 || pct > 100) return reply.code(400).send({ error: "brightness must be 0..100" });
@@ -90,6 +94,7 @@ export async function buildHttp() {
   );
   app.post<{ Params: { id: string; zoneId: string }; Body: RecallPresetBody }>(
     "/api/devices/:id/zones/:zoneId/preset",
+    { preHandler: requireAuth },
     (req, reply) => {
       const p = Number(req.body?.presetId);
       if (!Number.isInteger(p)) return reply.code(400).send({ error: "presetId must be an integer" });
@@ -98,33 +103,42 @@ export async function buildHttp() {
   );
   app.post<{ Params: { id: string; zoneId: string }; Body: SetBlackoutBody }>(
     "/api/devices/:id/zones/:zoneId/blackout",
+    { preHandler: requireAuth },
     (req, reply) => zoneOp(reply, req.params.id, req.params.zoneId, "setBlackout", Boolean(req.body?.blackout)),
   );
 
-  app.post<{ Params: { id: string; name: string } }>("/api/devices/:id/action/:name", async (req, reply) => {
-    const drv = getDriver(req.params.id);
-    if (!drv?.action) return reply.code(400).send({ error: "device has no actions" });
-    try {
-      return { ok: true, result: await drv.action(req.params.name) };
-    } catch (e) {
-      return fail(reply, 502, e);
-    }
-  });
+  app.post<{ Params: { id: string; name: string } }>(
+    "/api/devices/:id/action/:name",
+    { preHandler: requireAuth },
+    async (req, reply) => {
+      const drv = getDriver(req.params.id);
+      if (!drv?.action) return reply.code(400).send({ error: "device has no actions" });
+      try {
+        return { ok: true, result: await drv.action(req.params.name) };
+      } catch (e) {
+        return fail(reply, 502, e);
+      }
+    },
+  );
 
   /* ---- power ---- */
 
-  app.post<{ Params: { target: string; onoff: "on" | "off" } }>("/api/power/:target/:onoff", async (req, reply) => {
-    try {
-      await powerDomain(req.params.target, req.params.onoff === "on");
-      return { ok: true };
-    } catch (e) {
-      return fail(reply, 502, e);
-    }
-  });
+  app.post<{ Params: { target: string; onoff: "on" | "off" } }>(
+    "/api/power/:target/:onoff",
+    { preHandler: requireAuth },
+    async (req, reply) => {
+      try {
+        await powerDomain(req.params.target, req.params.onoff === "on");
+        return { ok: true };
+      } catch (e) {
+        return fail(reply, 502, e);
+      }
+    },
+  );
 
   /* ---- presets ---- */
 
-  app.get("/api/presets", async () => getPresets());
+  app.get("/api/presets", { preHandler: requireAuth }, async () => getPresets());
   app.post<{ Body: Partial<AppPreset> & { label: string } }>(
     "/api/presets",
     { preHandler: requireAuth },
@@ -137,18 +151,22 @@ export async function buildHttp() {
     deletePreset(req.params.id);
     return { ok: true };
   });
-  app.post<{ Params: { id: string } }>("/api/presets/:id/apply", async (req, reply) => {
-    try {
-      await applyPreset(req.params.id, { manual: true });
-      return { ok: true };
-    } catch (e) {
-      return fail(reply, 502, e);
-    }
-  });
+  app.post<{ Params: { id: string } }>(
+    "/api/presets/:id/apply",
+    { preHandler: requireAuth },
+    async (req, reply) => {
+      try {
+        await applyPreset(req.params.id, { manual: true });
+        return { ok: true };
+      } catch (e) {
+        return fail(reply, 502, e);
+      }
+    },
+  );
 
   /* ---- schedule ---- */
 
-  app.get("/api/schedule", async () => getSchedule());
+  app.get("/api/schedule", { preHandler: requireAuth }, async () => getSchedule());
   app.put<{ Body: { entries: ScheduleEntry[] } }>(
     "/api/schedule",
     { preHandler: requireAuth },
@@ -157,10 +175,14 @@ export async function buildHttp() {
       return setEntries(req.body.entries);
     },
   );
-  app.post<{ Body: { hours?: number; clear?: boolean } }>("/api/schedule/snooze", async (req) => {
-    const { hours = 1, clear = false } = req.body ?? {};
-    return snooze(Number(hours), Boolean(clear));
-  });
+  app.post<{ Body: { hours?: number; clear?: boolean } }>(
+    "/api/schedule/snooze",
+    { preHandler: requireAuth },
+    async (req) => {
+      const { hours = 1, clear = false } = req.body ?? {};
+      return snooze(Number(hours), Boolean(clear));
+    },
+  );
 
   /* ---- setup wizard (device config — needs the settings password once one is set) ---- */
 

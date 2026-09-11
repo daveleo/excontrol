@@ -36,12 +36,11 @@ describe("settings lock — unlocked by default", () => {
     expect((await app.inject({ method: "PUT", url: "/api/schedule", ...json({ entries: [] }) })).statusCode).toBe(200);
   });
 
-  it("control endpoints never require auth, even when locked", async () => {
+  it("/health and the auth endpoints themselves stay open even once locked", async () => {
     await app.inject({ method: "POST", url: "/api/auth/set-password", ...json({ newPassword: "hunter2" }) });
-    const power = await app.inject({ method: "POST", url: "/api/power/nope/on" });
-    const apply = await app.inject({ method: "POST", url: "/api/presets/nope/apply" });
-    expect(power.statusCode).not.toBe(401);
-    expect(apply.statusCode).not.toBe(401);
+    expect((await app.inject({ method: "GET", url: "/health" })).statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: "/api/auth/status" })).statusCode).toBe(200);
+    expect((await app.inject({ method: "POST", url: "/api/auth/login", ...json({ password: "wrong" }) })).statusCode).toBe(401); // reachable, just rejected
   });
 });
 
@@ -51,16 +50,26 @@ describe("settings lock — set, login, gated routes", () => {
     expect(r.json()).toEqual({ ok: true, locked: true });
   });
 
-  it("gated routes 401 with no token, and with a wrong token", async () => {
+  it("the whole control surface 401s with no token, and with a wrong token", async () => {
     interface Req { method: "GET" | "POST" | "PUT" | "DELETE"; url: string; payload?: string; headers?: Record<string, string> }
     const reqs: Req[] = [
+      { method: "GET", url: "/api/state" },
       { method: "GET", url: "/api/setup/state" },
       { method: "POST", url: "/api/setup/probe", ...json({ type: "obs" }) },
       { method: "GET", url: "/api/setup/scan" },
       { method: "POST", url: "/api/setup/save", ...json({ devices: [] }) },
+      { method: "GET", url: "/api/presets" },
       { method: "POST", url: "/api/presets", ...json({ label: "x" }) },
       { method: "DELETE", url: "/api/presets/x" },
+      { method: "POST", url: "/api/presets/x/apply" },
+      { method: "GET", url: "/api/schedule" },
       { method: "PUT", url: "/api/schedule", ...json({ entries: [] }) },
+      { method: "POST", url: "/api/schedule/snooze", ...json({ clear: true }) },
+      { method: "POST", url: "/api/power/all/on" },
+      { method: "POST", url: "/api/devices/x/zones/-/brightness", ...json({ brightness: 50 }) },
+      { method: "POST", url: "/api/devices/x/zones/-/preset", ...json({ presetId: 1 }) },
+      { method: "POST", url: "/api/devices/x/zones/-/blackout", ...json({ blackout: true }) },
+      { method: "POST", url: "/api/devices/x/action/power_on" },
     ];
     for (const req of reqs) {
       expect((await app.inject(req)).statusCode, req.url).toBe(401);
@@ -80,10 +89,13 @@ describe("settings lock — set, login, gated routes", () => {
     expect((await app.inject({ method: "GET", url: "/api/auth/verify", headers: bearer(token) })).json()).toEqual({ valid: true });
   });
 
-  it("still lets you view + apply presets and view the schedule without a token", async () => {
-    expect((await app.inject({ method: "GET", url: "/api/presets" })).statusCode).toBe(200);
-    expect((await app.inject({ method: "GET", url: "/api/schedule" })).statusCode).toBe(200);
-    expect((await app.inject({ method: "POST", url: "/api/schedule/snooze", ...json({ clear: true }) })).statusCode).toBe(200);
+  it("a valid token unlocks the whole control surface, not just settings", async () => {
+    const { token } = (await app.inject({ method: "POST", url: "/api/auth/login", ...json({ password: "hunter2" }) })).json();
+    expect((await app.inject({ method: "GET", url: "/api/state", headers: bearer(token) })).statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: "/api/presets", headers: bearer(token) })).statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: "/api/schedule", headers: bearer(token) })).statusCode).toBe(200);
+    expect((await app.inject({ method: "POST", url: "/api/schedule/snooze", ...json({ clear: true }, bearer(token)) })).statusCode).toBe(200);
+    expect((await app.inject({ method: "POST", url: "/api/power/all/on", headers: bearer(token) })).statusCode).not.toBe(401);
   });
 
   it("changing the password requires the current one and revokes old tokens", async () => {

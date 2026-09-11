@@ -56,6 +56,30 @@ input, select, button { font: inherit; color: inherit; }
 .app { max-width: 1140px; margin: 0 auto; padding: 20px; }
 .loading { color: var(--muted); }
 
+/* access gate — the whole page, not a modal over hidden content */
+.access-gate {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  background: var(--bg); padding: 20px;
+}
+.access-gate-card {
+  width: 100%; max-width: 340px; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 14px; box-shadow: var(--shadow); padding: 28px 26px;
+  display: flex; flex-direction: column; gap: 14px; text-align: center;
+}
+.access-gate-card h1 { margin: 0; font-size: 20px; }
+.access-gate-card p { margin: 0; color: var(--muted); font-size: 13px; }
+.access-gate-card input {
+  background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+  padding: 10px 12px; border-radius: 8px; font-size: 14px; text-align: center;
+}
+.access-gate-card input:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+.access-gate-card button.primary {
+  background: var(--accent); border: 1px solid var(--accent); color: #fff; font-weight: 600;
+  padding: 11px 16px; border-radius: 8px; cursor: pointer; font-size: 14px;
+}
+.access-gate-card button.primary:disabled { opacity: 0.55; cursor: not-allowed; }
+.access-gate-card .err { color: var(--err); font-size: 13px; margin: 0; }
+
 /* topbar */
 .topbar {
   display: flex; align-items: center; justify-content: space-between;

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useShowroom } from "./useShowroom.js";
 import { DeviceCard } from "./components/DeviceCard.js";
 import { PowerBanner } from "./components/PowerBanner.js";
@@ -9,13 +9,59 @@ import { ShutdownModal } from "./components/ShutdownModal.js";
 import { SetupWizardLoader } from "./components/SetupWizard.js";
 import { UnlockModal } from "./components/UnlockModal.js";
 import { UpdateBanner } from "./components/UpdateBanner.js";
-import { verifyToken } from "./api.js";
+import { AccessGate } from "./components/AccessGate.js";
+import { authStatus, verifyToken } from "./api.js";
 import { ensureUnlocked } from "./lib/unlock.js";
 
+/**
+ * Once a password is set, nothing below renders until it's satisfied — the whole control
+ * surface is gated, not just settings, so an unauthenticated visitor can't see or operate
+ * the room at all. `GET /api/auth/status` is the one thing that stays open regardless
+ * (how else would the page know whether to show the gate?).
+ */
 export function App() {
-  const { state, connected, toasts, dismiss } = useShowroom();
+  const [authPhase, setAuthPhase] = useState<"checking" | "locked" | "open">("checking");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const status = await authStatus();
+        if (!status.locked) {
+          if (!cancelled) setAuthPhase("open");
+          return;
+        }
+        const valid = await verifyToken();
+        if (!cancelled) setAuthPhase(valid ? "open" : "locked");
+      } catch {
+        // Can't reach the server at all yet — Dashboard's own "Connecting…" state handles
+        // that; don't strand the operator behind a gate check that never resolved.
+        if (!cancelled) setAuthPhase("open");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleUnauthorized = useCallback(() => setAuthPhase("locked"), []);
+
+  if (authPhase === "checking") {
+    return (
+      <div className="app">
+        <p className="loading">Connecting…</p>
+      </div>
+    );
+  }
+  if (authPhase === "locked") {
+    return <AccessGate onUnlocked={() => setAuthPhase("open")} />;
+  }
+  return <Dashboard onUnauthorized={handleUnauthorized} />;
+}
+
+function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
+  const { state, connected, toasts, dismiss } = useShowroom(onUnauthorized);
   const [panel, setPanel] = useState<null | "presets" | "schedule" | "devices">(null);
-  const [firstRunUnlocked, setFirstRunUnlocked] = useState(false);
 
   const scheduleCount = state?.schedule.entries.filter((e) => e.enabled).length ?? 0;
   const domainLevel = (deviceId: string) =>
@@ -26,14 +72,6 @@ export function App() {
   const epsOff = new Set(
     (state?.powerDomains ?? []).filter((d) => d.level === "off").map((d) => d.id),
   );
-
-  // A password can be set from a previous configuration that has since lost all its
-  // devices — don't let that strand the operator outside a wizard they can't reach.
-  const firstRunLockedOut = firstRun && locked && !firstRunUnlocked;
-  useEffect(() => {
-    if (!firstRunLockedOut) return;
-    void ensureUnlocked(true, verifyToken).then((ok) => ok && setFirstRunUnlocked(true));
-  }, [firstRunLockedOut]);
 
   const openDevices = async () => {
     if (panel === "devices") return setPanel(null);
@@ -77,10 +115,7 @@ export function App() {
 
       {state?.updateInfo && <UpdateBanner info={state.updateInfo} />}
 
-      {firstRun && firstRunLockedOut && (
-        <p className="loading">This install has a settings password — unlock it to continue setup.</p>
-      )}
-      {firstRun && !firstRunLockedOut && <SetupWizardLoader onClose={() => setPanel(null)} epsOff={epsOff} />}
+      {firstRun && <SetupWizardLoader onClose={() => setPanel(null)} epsOff={epsOff} />}
 
       {state && !firstRun && (
         <>

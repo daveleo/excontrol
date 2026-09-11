@@ -86,8 +86,8 @@ typecheck/tests, both are now fixed):
 - `GET /api/config/export` (full config incl. device credentials — the point is
   pre-staging a new PC; the settings-password hash/salt is stripped, it doesn't travel)
   and `POST /api/config/import` (validates, restarts drivers, keeps *this* machine's
-  password no matter what the file carries). Both gated by the settings password once
-  one is set.
+  password no matter what the file carries). Both gated by the access password once
+  one is set — same as everything else now (see Hardening below).
 - `GET /api/diagnostics` — a zip (via `fflate`, pure JS, esbuild-bundled fine) with the
   redacted config, a live `/api/state` snapshot, `system.json` (OS/Node/eXcontrol
   versions, memory, uptime), and the last ~2000 log lines. Safe to hand to support.
@@ -109,14 +109,23 @@ typecheck/tests, both are now fixed):
 - **Multi-device — validated on real hardware**: the showroom now runs **two H-series
   controllers** simultaneously (`h9` on the power domain, a second always-on `H-2`) plus
   MX40 and EPS, confirmed via CBLATest. Multi-EPS is still simulation-tested only.
-- **Settings password**: an optional shared password (Devices → App settings) gates
-  device setup, preset/schedule *editing*, and config export/import/diagnostics — zone
-  control, power and preset *apply* stay open to any phone on the LAN. Salted **async**
-  scrypt hash (moved off `scryptSync`, which blocked the whole event loop for ~35-40ms
-  per attempt — measured, and a real DoS-by-login-spam risk before the fix) + bearer
-  tokens (in-memory, 30-day TTL) + a per-IP rate limit (5 failures/60s → 30s lockout) on
-  login and on set-password's current-password check. Forgotten password recovers by
-  deleting the hash/salt from the config file.
+- **Access password**: an optional shared password (Devices → App settings) that gates
+  the **whole control panel** — every REST route and the `/ws` live feed both require it
+  once set, so an unauthenticated visitor gets a login screen and nothing else, not even
+  read-only state. (Originally scoped to settings-only; widened after real-world use —
+  "lock unauthorized users from operating LED systems at all", not just from
+  reconfiguring.) The one thing that stays reachable regardless: `/health` (ops liveness,
+  no control) and the auth endpoints themselves. Browsers can't set a custom header on a
+  WS handshake, so the token travels as `/ws?token=...` — `verifyClient` rejects the
+  upgrade outright for a missing/bad token, checked before the socket ever opens. On the
+  frontend, `App.tsx` checks `/api/auth/status` (always open) before rendering anything
+  else — a locked, unauthenticated visitor sees only a full-page password prompt
+  (`AccessGate`), never the dashboard shell. Salted **async** scrypt hash (moved off
+  `scryptSync`, which blocked the whole event loop for ~35-40ms per attempt — measured,
+  and a real DoS-by-login-spam risk before the fix) + bearer tokens (in-memory, 30-day
+  TTL) + a per-IP rate limit (5 failures/60s → 30s lockout) on login and on
+  set-password's current-password check. Forgotten password recovers by deleting the
+  hash/salt from the config file.
 - **Configurable port**: settable from the same App settings section; the backend rebinds
   its HTTP listener live (`registerHttpRestarter`/`restartHttpServer`) and the browser
   follows automatically. Devices don't restart for a pure port change.
