@@ -55,11 +55,13 @@
   control PC's own window (only it can run the installer, but anyone holding a phone
   should know one's waiting).
 - Unsigned build → SmartScreen "More info → Run anyway" (now documented in the README).
-- **Needs one remaining manual step**: nothing here creates a GitHub Release. Tag a
-  version (`git tag vX.Y.Z && git push --tags`) and either publish by hand
-  (`cd desktop && npx electron-builder --publish always`, needs a `GH_TOKEN`) or add a
-  release workflow — not set up yet. Until a release exists, checks correctly report
-  "No published versions on GitHub" (verified — see below).
+- **CI + release workflow (`.github/workflows/ci.yml` / `release.yml`)**: every push/PR to
+  `main` builds + typechecks + tests all four workspaces (`ubuntu-latest`); pushing a
+  `vX.Y.Z` tag builds the Windows installer (`windows-latest`) and publishes it to that
+  tag's GitHub Release via `electron-builder --publish always`, using the run's own
+  `GITHUB_TOKEN` (`contents: write`) — no manual `GH_TOKEN` needed. **Still needs the first
+  tag actually pushed** to produce a real release; until then, checks correctly report "No
+  published versions on GitHub" (verified — see below).
 
 **Two real bugs found only by running the packaged app** (neither showed up in
 typecheck/tests, both are now fixed):

@@ -1,0 +1,36 @@
+name: Release
+
+# Tag a version (git tag vX.Y.Z && git push --tags) to build the Windows installer and
+# publish it as a GitHub Release — same artifact/feed electron-updater checks against.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # electron-builder --publish always creates/updates the GitHub Release
+
+jobs:
+  build-and-publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build (shared -> backend -> frontend)
+        run: npm run build
+
+      - name: Test (backend)
+        run: npm test
+
+      - name: Build + publish the installer to this tag's GitHub Release
+        working-directory: desktop
+        run: npm run bundle && npx electron-builder --win --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
