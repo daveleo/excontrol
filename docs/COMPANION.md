@@ -28,9 +28,11 @@ URLs below. Example from a real config:
 
 ## Actions Companion can fire (Generic HTTP Request)
 
-None of these need a password/token, even if you've set a settings password on the
-Devices screen — that lock only protects *configuration* (device setup, preset editing,
-schedule editing), never control.
+If an **access password** is set (Devices → App settings), it gates *everything* below too —
+the whole control surface, not just configuration (see the README). Add an
+`Authorization: Bearer <token>` header to the Generic HTTP connection (`POST /api/auth/login`
+with `{"password": "..."}` returns a 30-day token) if you've set one. With no password set,
+none of this needs a header at all.
 
 | What | Method | URL | Body (JSON) |
 |---|---|---|---|
@@ -38,22 +40,28 @@ schedule editing), never control.
 | Recall a controller preset | POST | `/api/devices/h9/zones/led/preset` | `{"presetId": 0}` |
 | Blackout on/off | POST | `/api/devices/h9/zones/led/blackout` | `{"blackout": true}` |
 | Power an EPS unit | POST | `/api/power/eps/on` (or `/off`, or target `all`) | — |
+| Switch a named EPS output (independent output control) | POST | `/api/devices/eps/zones/<output-id>/on` | `{"on": true}` |
 | Recall an OBS scene | POST | `/api/devices/obs/zones/scenes/preset` | `{"presetId": 1}` |
 | Apply a saved eXcontrol preset (cross-device look) | POST | `/api/presets/<preset-id>/apply` | — |
 | Raw EPS command | POST | `/api/devices/eps/action/power_on` (or `power_off`, `status`) | — |
 
 Use `-` as the zone id (`/api/devices/h9/zones/-/brightness`) to hit a device's first/only
-zone without knowing its id — handy for single-zone controllers.
+zone without knowing its id — handy for single-zone controllers. The named-output row above
+is only available if that EPS has independent output control enabled (Devices) — its zone
+ids are whatever you named them there, visible in `GET /api/state`.
 
 ## Setting it up in Companion
 
 1. Add the **Generic HTTP** connection, target `http://<control-pc-ip>:8080`.
-2. New button → **Add action** → *Generic HTTP → Request*.
-3. Method `POST`, URL path from the table, `Content-Type: application/json`, body the JSON
+2. If an access password is set, log in once (`POST /api/auth/login`) to get a token, and
+   add `Authorization: Bearer <token>` as a static header on the connection.
+3. New button → **Add action** → *Generic HTTP → Request*.
+4. Method `POST`, URL path from the table, `Content-Type: application/json`, body the JSON
    shown. For a GET-only feedback, `/api/state` returns the same JSON `GET /api/state`
    returns to the web UI, if you want to build a poller.
-4. Test with a real Companion button before wiring the whole panel — a wrong zone/device id
-   comes back as `{"error": "..."}` with an HTTP 4xx, visible in Companion's connection log.
+5. Test with a real Companion button before wiring the whole panel — a wrong zone/device id
+   comes back as `{"error": "..."}` with an HTTP 4xx, visible in Companion's connection log
+   (a missing/wrong token comes back as `401`).
 
 ## Why this beats wiring Companion to the hardware directly
 

@@ -15,6 +15,9 @@ export const recallPreset = (id: string, zoneId: string | undefined, presetId: n
 export const setBlackout = (id: string, zoneId: string | undefined, blackout: boolean) =>
   post(`/api/devices/${id}/zones/${ZONE(zoneId)}/blackout`, { blackout });
 
+export const setOn = (id: string, zoneId: string, on: boolean) =>
+  post(`/api/devices/${id}/zones/${ZONE(zoneId)}/on`, { on });
+
 export const runAction = (id: string, name: string) =>
   post(`/api/devices/${id}/action/${name}`, {}).then((r) => String((r as { result?: unknown }).result ?? ""));
 

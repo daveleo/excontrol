@@ -78,6 +78,7 @@ async function runAction(a: PresetAction): Promise<void> {
   if (typeof a.brightness === "number" && drv.setBrightness) await drv.setBrightness(zoneId, a.brightness);
   if (typeof a.preset === "number" && drv.recallPreset) await drv.recallPreset(zoneId, a.preset);
   if (typeof a.blackout === "boolean" && drv.setBlackout) await drv.setBlackout(zoneId, a.blackout);
+  if (typeof a.on === "boolean" && drv.setOn) await drv.setOn(zoneId, a.on);
 }
 
 /** Apply a preset. `only` limits it to actions whose device is in that set (power-on scope). */

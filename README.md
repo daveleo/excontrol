@@ -24,12 +24,16 @@ Supports **NovaStar H-series** and **COEX** processors, **Expromo EPS** power un
 - **Per-screen control** — brightness, presets and blackout for each screen on each
   NovaStar controller, from a slider and a couple of taps.
 - **Power** — on/off per EPS unit, with a plain-language status (ON / Starting up… /
-  Powered down / not responding) and per-output warnings.
+  Powered down / not responding) and per-output warnings. Optionally, **independent output
+  control** exposes up to 6 named relays per EPS as their own on/off switches with live
+  state, alongside — not instead of — the whole-unit Power button.
 - **Presets** — save a look (brightness + presets + blackout + OBS scene across devices)
   and recall it with one tap, or set it as the power-on default for a power unit.
 - **Scheduler** — power on/off or apply a preset on a daily/weekly schedule, with a
   15-minute shutdown countdown and "extend by an hour".
 - **Live** — every open screen shows the same state, updated in seconds, no refresh.
+- **Dark / bright mode** — a switch top-right of the control panel; follows the OS theme
+  until the operator picks one, then remembers it per-browser.
 - **Access password (optional)** — lock the *entire* control panel behind a shared
   password from the Devices screen: viewing state, brightness, blackout, power, presets,
   the schedule, settings, all of it. Nobody without the password sees anything but a login
@@ -81,6 +85,13 @@ by hand instead, copy `config/excontrol.config.example.json` to
 
 - `zones` empty → the driver discovers the controller's screens on start.
 - `poweredBy` → which EPS powers this device; `null` = always on.
+- An EPS can set `"independentOutputs": true` and an `outputs` array
+  (`{ "id": "o1", "label": "House lights", "index": 1 }`, `index` 1-6, matching the unit's
+  physical relay) to expose named relays as separately switchable zones — set up from
+  **Devices**, not by hand-editing this file, but the shape is the same either way. The
+  whole-unit Power on/off button works the same whether this is set or not.
+- A device with `enabled: false` doesn't just show as offline — it's left out of the
+  dashboard entirely.
 - The whole file (including presets and schedule, which the UI edits) is one JSON document
   and is **not** committed — it holds device credentials.
 
@@ -106,6 +117,9 @@ any other local device's "physical access resets it" recovery.
 
 The control panel's **port** is configurable from the same App settings section; changing
 it reconnects every open browser to the new port automatically.
+
+See [`docs/NETWORK.md`](docs/NETWORK.md) for the full inbound-port + outbound-traffic
+breakdown IT/AV teams typically ask for before deployment.
 
 ## License
 

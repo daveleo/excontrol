@@ -34,12 +34,30 @@ export class EpsDriver extends BaseDriver {
   constructor(cfg: EpsConfig) {
     super(cfg);
     this.c = cfg;
-    this.zoneState = []; // EPS has no zones
+    // With independent output control enabled, each named relay is exposed as a plain
+    // on/off zone; the whole-unit Power on/off button (action("power_on"/"power_off"))
+    // is unaffected either way.
+    this.zoneState = this.c.independentOutputs
+      ? (this.c.outputs ?? []).map((o) => ({ id: o.id, label: o.label, on: undefined }))
+      : [];
   }
 
   async start(): Promise<void> {
-    this.patch({ status: "connecting", zones: [] });
+    this.patch({ status: "connecting", zones: this.zoneState });
     this.startPolling(() => this.refresh());
+  }
+
+  /** setOn zone -> physical relay index. */
+  private outputIndex(zoneId: string): number {
+    const o = (this.c.outputs ?? []).find((x) => x.id === zoneId);
+    if (!o) throw new Error(`${this.id}: no output "${zoneId}"`);
+    return o.index;
+  }
+
+  async setOn(zoneId: string, on: boolean): Promise<void> {
+    const idx = this.outputIndex(zoneId);
+    await this.send(`OUT${idx}_${on ? "ON" : "OFF"}`);
+    void this.refresh().catch(() => {});
   }
 
   /** One-shot connection test for the setup wizard. Never polls. */
@@ -87,6 +105,7 @@ export class EpsDriver extends BaseDriver {
   private async refresh(): Promise<void> {
     const raw = await this.send("POWER_STATUS");
     const f = parseStatus(raw);
+    if (this.c.independentOutputs && f.outputs) this.applyOutputBits(f.outputs);
     this.online({
       extra: {
         raw,
@@ -96,6 +115,16 @@ export class EpsDriver extends BaseDriver {
         net: f.net ?? null,
         label: f.label ?? null,
       },
+      zones: this.zoneState,
+    });
+  }
+
+  /** OUTPUTS is 6 bits, left-to-right for Output 1..6; "1" = ON. */
+  private applyOutputBits(bits: string): void {
+    this.zoneState = this.zoneState.map((z) => {
+      const o = (this.c.outputs ?? []).find((x) => x.id === z.id);
+      if (!o || o.index < 1 || o.index > bits.length) return z;
+      return { ...z, on: bits[o.index - 1] === "1" };
     });
   }
 

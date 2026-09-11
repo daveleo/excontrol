@@ -17,6 +17,14 @@ export interface SetupZone {
   deviceId?: number;
 }
 
+/** One named EPS relay, when independent output control is enabled for that unit. */
+export interface SetupEpsOutput {
+  id: string;
+  label: string;
+  /** 1-based physical relay number (1-6 on the 6CH box) */
+  index: number;
+}
+
 /** One device as the wizard edits it — a flattened superset of every device type's config. */
 export interface SetupDevice {
   id: string;
@@ -34,6 +42,9 @@ export interface SetupDevice {
   password?: string; // may be SECRET_KEPT
   /** H-series / COEX */
   zones?: SetupZone[];
+  /** EPS — off by default; the whole-unit Power on/off button is unaffected either way */
+  independentOutputs?: boolean;
+  outputs?: SetupEpsOutput[];
 }
 
 export interface SetupState {

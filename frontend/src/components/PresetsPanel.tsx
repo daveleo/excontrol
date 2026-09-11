@@ -9,7 +9,7 @@ import { ensureUnlocked } from "../lib/unlock.js";
 interface Row {
   key: string;           // "deviceId" or "deviceId:zoneId"
   label: string;
-  kind: "zone" | "obs" | "eps";
+  kind: "zone" | "obs" | "eps" | "output";
   device: DeviceState;
   zoneId?: string;
   presetOptions: { id: number; name: string }[];
@@ -20,6 +20,18 @@ function buildRows(state: AppState): Row[] {
   for (const d of state.devices) {
     if (d.type === "expromo-eps") {
       rows.push({ key: d.id, label: `${d.label} — power`, kind: "eps", device: d, presetOptions: [] });
+      // Independent output control: each named relay is its own settable row, alongside —
+      // not instead of — the whole-unit power row above.
+      for (const z of d.zones) {
+        rows.push({
+          key: `${d.id}:${z.id}`,
+          label: `${d.label} · ${z.label}`,
+          kind: "output",
+          device: d,
+          zoneId: z.id,
+          presetOptions: [],
+        });
+      }
     } else if (d.type === "obs") {
       const z = d.zones[0];
       rows.push({
@@ -215,6 +227,15 @@ function PresetEditor({
               <select value={a?.power ?? "on"} onChange={(e) => patch(r.key, { power: e.target.value as "on" | "off" })}>
                 <option value="on">Power ON</option>
                 <option value="off">Power OFF</option>
+              </select>
+            )}
+            {on && r.kind === "output" && (
+              <select
+                value={a?.on === false ? "off" : "on"}
+                onChange={(e) => patch(r.key, { on: e.target.value === "on" })}
+              >
+                <option value="on">ON</option>
+                <option value="off">OFF</option>
               </select>
             )}
           </div>

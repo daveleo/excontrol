@@ -32,25 +32,26 @@ export function driversByType(type: DeviceType): Driver[] {
 }
 
 export async function startDevices(cfg: AppConfig): Promise<void> {
-  const seed: DeviceState[] = cfg.devices.map((d) => ({
+  // Disabled devices don't get a card at all — not even a perpetual "offline" one — so the
+  // dashboard only ever shows equipment that's actually meant to be there.
+  const enabled = cfg.devices.filter((d) => d.enabled);
+  const seed: DeviceState[] = enabled.map((d) => ({
     id: d.id,
     type: d.type,
     label: d.label,
-    status: d.enabled ? "connecting" : "offline",
+    status: "connecting",
     poweredBy: d.poweredBy ?? null,
     zones: [],
   }));
   store.init(seed);
 
-  for (const d of cfg.devices) {
-    if (!d.enabled) {
-      log.info({ id: d.id }, "device disabled in config, skipping");
-      continue;
-    }
+  for (const d of enabled) {
     const drv = build(d);
     drivers.set(d.id, drv);
     drv.start().catch((e) => log.error({ id: d.id, err: e }, "driver failed to start"));
   }
+  const skipped = cfg.devices.length - enabled.length;
+  if (skipped) log.info({ skipped }, "disabled device(s) not started, hidden from dashboard");
 }
 
 export async function stopDevices(): Promise<void> {

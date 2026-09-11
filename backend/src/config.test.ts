@@ -25,6 +25,7 @@ const dev = (p: Partial<SetupDevice>): SetupDevice => ({
   enabled: p.enabled ?? true, host: p.host ?? "10.0.0.9", port: p.port ?? 5000,
   poweredBy: p.poweredBy, pId: p.pId, secretKey: p.secretKey, encrypted: p.encrypted,
   password: p.password, zones: p.zones,
+  independentOutputs: p.independentOutputs, outputs: p.outputs,
 });
 
 describe("applySetup — validation", () => {
@@ -115,5 +116,62 @@ describe("zone normalisation", () => {
     applySetup({ devices: [dev({ id: "c", type: "novastar-coex", host: "1.1.1.2", port: 8001, zones: [{ id: " ", label: "x", screenId: "" }, { id: "ok", label: "OK", screenId: "" }] })] });
     const c = getConfig().devices.find((d) => d.id === "c")!;
     expect(c.type === "novastar-coex" && c.zones.map((z) => z.id)).toEqual(["ok"]);
+  });
+});
+
+describe("EPS independent output control", () => {
+  it("off by default, no outputs stored", () => {
+    applySetup({ devices: [dev({ id: "eps" })] });
+    const eps = getConfig().devices.find((d) => d.id === "eps")!;
+    expect(eps.type === "expromo-eps" && eps.independentOutputs).toBe(false);
+    expect(eps.type === "expromo-eps" && eps.outputs).toEqual([]);
+  });
+
+  it("stores named outputs with 1-based relay indices", () => {
+    applySetup({
+      devices: [dev({
+        id: "eps", independentOutputs: true,
+        outputs: [{ id: "o1", label: "House lights", index: 1 }, { id: "o2", label: "Fog", index: 3 }],
+      })],
+    });
+    const eps = getConfig().devices.find((d) => d.id === "eps")!;
+    expect(eps.type === "expromo-eps" && eps.independentOutputs).toBe(true);
+    expect(eps.type === "expromo-eps" && eps.outputs).toEqual([
+      { id: "o1", label: "House lights", index: 1 },
+      { id: "o2", label: "Fog", index: 3 },
+    ]);
+  });
+
+  it("drops outputs with a blank id or an out-of-range index", () => {
+    applySetup({
+      devices: [dev({
+        id: "eps", independentOutputs: true,
+        outputs: [{ id: " ", label: "x", index: 1 }, { id: "ok", label: "OK", index: 0 }, { id: "ok2", label: "OK2", index: 7 }],
+      })],
+    });
+    const eps = getConfig().devices.find((d) => d.id === "eps")!;
+    expect(eps.type === "expromo-eps" && eps.outputs).toEqual([]);
+  });
+
+  it("rejects duplicate output ids", () => {
+    expect(() =>
+      applySetup({
+        devices: [dev({
+          id: "eps", independentOutputs: true,
+          outputs: [{ id: "o1", label: "A", index: 1 }, { id: "o1", label: "B", index: 2 }],
+        })],
+      }),
+    ).toThrow(/duplicate output id/i);
+  });
+
+  it("rejects duplicate output relay indices", () => {
+    expect(() =>
+      applySetup({
+        devices: [dev({
+          id: "eps", independentOutputs: true,
+          outputs: [{ id: "o1", label: "A", index: 2 }, { id: "o2", label: "B", index: 2 }],
+        })],
+      }),
+    ).toThrow(/duplicate output index/i);
   });
 });

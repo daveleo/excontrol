@@ -9,6 +9,7 @@ import { ShutdownModal } from "./components/ShutdownModal.js";
 import { SetupWizardLoader } from "./components/SetupWizard.js";
 import { UnlockModal } from "./components/UnlockModal.js";
 import { UpdateBanner } from "./components/UpdateBanner.js";
+import { ThemeToggle } from "./components/ThemeToggle.js";
 import { AccessGate } from "./components/AccessGate.js";
 import { authStatus, verifyToken } from "./api.js";
 import { ensureUnlocked } from "./lib/unlock.js";
@@ -108,6 +109,7 @@ function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
             {scheduleCount > 0 && <span className="badge">{scheduleCount}</span>}
           </button>
           {state && <span className="build">v{state.app.version}</span>}
+          <ThemeToggle />
         </div>
       </header>
 

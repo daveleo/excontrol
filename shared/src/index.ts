@@ -26,7 +26,8 @@ export interface Preset {
   name: string;
 }
 
-/** One controllable screen on a controller. EPS has none; OBS has one (its scene list). */
+/** One controllable screen on a controller, or (for an EPS with independent output
+ *  control enabled) one named relay. EPS has none by default; OBS has one (its scenes). */
 export interface ZoneState {
   id: string;
   label: string;
@@ -34,6 +35,8 @@ export interface ZoneState {
   blackout?: boolean;
   presets?: Preset[];
   activePreset?: number;
+  /** a plain on/off zone (EPS relay) rather than a brightness one */
+  on?: boolean;
 }
 
 export interface DeviceState {
@@ -85,7 +88,8 @@ export interface PresetAction {
   preset?: number;     // recall this zone's preset id
   blackout?: boolean;  // H/COEX zone
   scene?: string;      // OBS scene name
-  power?: "on" | "off"; // EPS device
+  power?: "on" | "off"; // EPS device (whole unit)
+  on?: boolean;         // EPS relay zone (independent output control)
 }
 
 export interface AppPreset {
@@ -163,5 +167,6 @@ export type ServerMessage =
 export interface SetBrightnessBody { brightness: number }
 export interface RecallPresetBody { presetId: number }
 export interface SetBlackoutBody { blackout: boolean }
+export interface SetOnBody { on: boolean }
 export interface SnoozeBody { hours?: number; clear?: boolean }
 export interface ApiError { error: string }

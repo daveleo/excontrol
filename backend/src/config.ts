@@ -57,8 +57,18 @@ export interface CoexConfig extends BaseDeviceConfig {
   zones: ZoneConfig[];
 }
 
+export interface EpsOutputConfig {
+  id: string;
+  label: string;
+  /** 1-based physical relay number, matches OUTx_ON/OFF. */
+  index: number;
+}
+
 export interface EpsConfig extends BaseDeviceConfig {
   type: "expromo-eps";
+  /** off by default; the whole-unit Power on/off button is unaffected either way. */
+  independentOutputs?: boolean;
+  outputs?: EpsOutputConfig[];
 }
 
 export interface ObsConfig extends BaseDeviceConfig {
@@ -186,6 +196,10 @@ function toSetupDevice(d: DeviceConfig): SetupDevice {
     base.zones = d.zones ?? [];
   }
   if (d.type === "novastar-coex") base.zones = d.zones ?? [];
+  if (d.type === "expromo-eps") {
+    base.independentOutputs = !!d.independentOutputs;
+    base.outputs = d.outputs ?? [];
+  }
   if (d.type === "obs") base.password = d.password ? SECRET_KEPT : "";
   return base;
 }
@@ -234,7 +248,11 @@ function fromSetupDevice(input: SetupDevice): DeviceConfig {
     case "novastar-coex":
       return { ...common, type: "novastar-coex", zones: cleanZones(d.zones, "string") };
     case "expromo-eps":
-      return { ...common, type: "expromo-eps" };
+      return {
+        ...common, type: "expromo-eps",
+        independentOutputs: !!d.independentOutputs,
+        outputs: cleanOutputs(d.outputs),
+      };
     case "obs":
       return { ...common, type: "obs", password: d.password || "" };
   }
@@ -249,6 +267,17 @@ function cleanZones(zones: SetupDevice["zones"], screenIdKind: "number" | "strin
       screenId: screenIdKind === "number" ? Number(z.screenId) || 0 : String(z.screenId ?? "").trim(),
       ...(z.deviceId != null ? { deviceId: Number(z.deviceId) || 0 } : {}),
     }));
+}
+
+function cleanOutputs(outputs: SetupDevice["outputs"]): EpsOutputConfig[] {
+  return (outputs ?? [])
+    .filter((o) => o && String(o.id).trim())
+    .map((o) => ({
+      id: String(o.id).trim(),
+      label: (o.label || "").trim() || String(o.id).trim(),
+      index: Number(o.index) || 0,
+    }))
+    .filter((o) => o.index >= 1 && o.index <= 6);
 }
 
 /** Validate + persist a wizard submission. Presets/schedule are left untouched. */
@@ -317,6 +346,16 @@ function validate(cfg: AppConfig): void {
       for (const z of d.zones) {
         if (zids.has(z.id)) throw new Error(`config: device "${d.id}" has duplicate zone id "${z.id}"`);
         zids.add(z.id);
+      }
+    }
+    if (d.type === "expromo-eps" && d.outputs) {
+      const oids = new Set<string>();
+      const oidx = new Set<number>();
+      for (const o of d.outputs) {
+        if (oids.has(o.id)) throw new Error(`config: device "${d.id}" has duplicate output id "${o.id}"`);
+        oids.add(o.id);
+        if (oidx.has(o.index)) throw new Error(`config: device "${d.id}" has duplicate output index ${o.index}`);
+        oidx.add(o.index);
       }
     }
   }

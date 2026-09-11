@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import type { DeviceState, ZoneState, PowerLevel } from "@excontrol/shared";
-import { setBrightness, recallPreset, setBlackout, runAction } from "../api.js";
+import { setBrightness, recallPreset, setBlackout, setOn, runAction } from "../api.js";
 
 const STATUS_LABEL: Record<DeviceState["status"], string> = {
   connecting: "Connecting…",
@@ -182,6 +182,24 @@ function EpsBody({
         <button disabled={busy} onClick={guard(() => runAction(device.id, "power_off"))}>Power off</button>
       </div>
       {e.label != null && <p className="hint muted">{String(e.label)}</p>}
+
+      {device.zones.length > 0 && (
+        <div className="eps-named-outputs">
+          <span className="section-label">Outputs</span>
+          {device.zones.map((z) => (
+            <button
+              key={z.id}
+              className={`output-row ${z.on ? "on" : ""}`}
+              disabled={busy}
+              onClick={guard(() => setOn(device.id, z.id, !z.on))}
+            >
+              <span className="output-dot" />
+              <span className="output-label">{z.label}</span>
+              <span className="output-state">{z.on == null ? "—" : z.on ? "ON" : "OFF"}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

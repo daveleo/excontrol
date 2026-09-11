@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { DeviceType, SetupDevice, SetupState, SetupZone, ProbeResult, ScanHit } from "@excontrol/shared";
+import type { DeviceType, SetupDevice, SetupState, SetupZone, SetupEpsOutput, ProbeResult, ScanHit } from "@excontrol/shared";
 import {
   getSetupState, probeDevice, scanNetwork, saveSetup, setSettingsPassword, login, verifyToken,
   exportConfig, importConfig, downloadDiagnostics,
@@ -85,6 +85,7 @@ export function SetupWizard({
         poweredBy: null,
         ...(type === "novastar-h" ? { pId: "", secretKey: "", encrypted: false, zones: [] } : {}),
         ...(type === "novastar-coex" ? { zones: [] } : {}),
+        ...(type === "expromo-eps" ? { independentOutputs: false, outputs: [] } : {}),
         ...(type === "obs" ? { password: "", host: host || "127.0.0.1" } : {}),
       };
       return [...ds, d];
@@ -480,6 +481,22 @@ function DeviceForm({
   const removeZone = (i: number) => onChange({ zones: zones.filter((_, zi) => zi !== i) });
   const useDetectedZones = () => result?.zones && onChange({ zones: result.zones });
 
+  // EPS independent output control: the whole-unit Power on/off button (above) is unaffected
+  // either way — this only exposes up to 6 named relays as separately switchable outputs.
+  const outputs = d.outputs ?? [];
+  const outputAt = (index: number) => outputs.find((o) => o.index === index);
+  const setOutput = (index: number, patch: Partial<SetupEpsOutput> | null) => {
+    if (patch === null) {
+      onChange({ outputs: outputs.filter((o) => o.index !== index) });
+      return;
+    }
+    const existing = outputAt(index);
+    const next = existing
+      ? outputs.map((o) => (o.index === index ? { ...o, ...patch } : o))
+      : [...outputs, { id: `o${index}`, label: `Output ${index}`, index, ...patch }];
+    onChange({ outputs: next.sort((a, b) => a.index - b.index) });
+  };
+
   return (
     <div className={`wiz-device ${d.enabled ? "" : "off"}`}>
       <div className="wd-top">
@@ -552,6 +569,45 @@ function DeviceForm({
           </label>
         )}
       </div>
+
+      {d.type === "expromo-eps" && (
+        <div className="wd-outputs">
+          <label className="toggle">
+            <input
+              type="checkbox" checked={!!d.independentOutputs}
+              onChange={(e) => onChange({ independentOutputs: e.target.checked })}
+            />
+            Enable independent output control
+          </label>
+          <span className="muted small">
+            The Power on/off button above always controls the whole unit. Turning this on adds
+            named on/off buttons for individual relays, shown in this EPS's dashboard cell.
+          </span>
+          {d.independentOutputs && (
+            <div className="wd-output-rows">
+              {[1, 2, 3, 4, 5, 6].map((idx) => {
+                const o = outputAt(idx);
+                return (
+                  <div className="wd-output-row" key={idx}>
+                    <label className="toggle">
+                      <input
+                        type="checkbox" checked={!!o}
+                        onChange={(e) => setOutput(idx, e.target.checked ? {} : null)}
+                      />
+                      Relay {idx}
+                    </label>
+                    <input
+                      className="z-label" placeholder={`Output ${idx} name`}
+                      value={o?.label ?? ""} disabled={!o}
+                      onChange={(e) => setOutput(idx, { label: e.target.value })}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {d.type === "novastar-h" && (
         <div className="wd-help">

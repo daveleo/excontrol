@@ -6,7 +6,7 @@ import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
 import { zipSync, strToU8 } from "fflate";
 import type {
-  SetBrightnessBody, RecallPresetBody, SetBlackoutBody, AppPreset, ScheduleEntry,
+  SetBrightnessBody, RecallPresetBody, SetBlackoutBody, SetOnBody, AppPreset, ScheduleEntry,
   SetupDevice, SetupSaveBody, SetupSaveResponse, LoginBody, SetPasswordBody, UpdateStatusBody,
 } from "@excontrol/shared";
 import { BRAND } from "@excontrol/shared";
@@ -66,7 +66,7 @@ export async function buildHttp() {
     reply: any,
     id: string,
     zoneId: string,
-    cap: "setBrightness" | "recallPreset" | "setBlackout",
+    cap: "setBrightness" | "recallPreset" | "setBlackout" | "setOn",
     arg: number | boolean,
   ) {
     const drv = getDriver(id);
@@ -105,6 +105,11 @@ export async function buildHttp() {
     "/api/devices/:id/zones/:zoneId/blackout",
     { preHandler: requireAuth },
     (req, reply) => zoneOp(reply, req.params.id, req.params.zoneId, "setBlackout", Boolean(req.body?.blackout)),
+  );
+  app.post<{ Params: { id: string; zoneId: string }; Body: SetOnBody }>(
+    "/api/devices/:id/zones/:zoneId/on",
+    { preHandler: requireAuth },
+    (req, reply) => zoneOp(reply, req.params.id, req.params.zoneId, "setOn", Boolean(req.body?.on)),
   );
 
   app.post<{ Params: { id: string; name: string } }>(

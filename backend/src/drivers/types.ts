@@ -15,6 +15,8 @@ export interface Driver {
   setBrightness?(zoneId: string, pct: number): Promise<void>;
   recallPreset?(zoneId: string, presetId: number): Promise<void>;
   setBlackout?(zoneId: string, on: boolean): Promise<void>;
+  /** EPS independent output control: a plain on/off relay zone. */
+  setOn?(zoneId: string, on: boolean): Promise<void>;
   /** EPS-style raw actions keyed by name ("power_on" / "power_off" / "status"). */
   action?(name: string): Promise<string>;
 

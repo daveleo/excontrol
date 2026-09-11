@@ -140,6 +140,42 @@ typecheck/tests, both are now fixed):
   advisories — not shipped in the product, fixing them needs an electron-builder major
   bump not attempted this session.
 
+## Phase 6 — EPS independent output control, theming, dashboard polish  ✅
+
+- **EPS independent output control.** Off by default — the whole-unit Power on/off button
+  (`action("power_on"/"power_off")`) is a completely separate code path and is unaffected
+  either way. When enabled per-EPS in Devices (`independentOutputs: true` + an `outputs`
+  array of up to 6 `{ id, label, index }`, `index` 1-6 matching the unit's physical relay),
+  each named relay becomes a plain on/off `ZoneState` — its own named row in that EPS's
+  dashboard cell (on/off button + live state), a settable row in the preset editor, and a
+  target for `POST /api/devices/:id/zones/:zoneId/on`. Protocol: `OUTx_ON`/`OUTx_OFF` per
+  relay (`x` = 1-6), `POWER_STATUS`'s `OUTPUTS` field (6 bits, left-to-right = Output 1-6,
+  `1`=ON) parsed into per-output state on every poll. Deliberately **no extra security
+  tier** for relay control — same access-password gate as everything else, per explicit
+  decision (no per-customer need identified yet).
+  - **Verified against real production hardware** (the Aarhus showroom EPS): `STATE=FULLY_ON`
+    and `STATE=OFF` both occur exactly as the existing driver already assumed (powering on
+    → `FULLY_ON`, switching one relay off → `PARTIAL_ON` with the `OUTPUTS` bit updating
+    correctly, back on → `FULLY_ON` again) — the new Expromo EPS v2.2 protocol doc's own
+    `STATE` enum (`IDLE`/`SEQUENCING` only) is incomplete relative to the deployed firmware;
+    the codebase's existing assumptions were the correct ones and were not changed to match
+    the doc. The `OUTx_ON`/`OUTx_OFF`/`POWER_STATUS`/unknown-command behaviour in the doc
+    was also confirmed live and matches exactly.
+- **Dark / bright mode switch**, top-right of the toolbar (`ThemeToggle.tsx`). The
+  light/dark CSS token system already existed (`styles.css`); this just adds the control.
+  Follows the OS theme (no explicit choice stamped) until the operator toggles it once,
+  then remembers the explicit choice per-browser in `localStorage` and stamps
+  `data-theme` on the root element.
+- **Disabling a device hides its dashboard cell entirely** — `startDevices()` now seeds
+  `AppState` from `enabled` devices only, instead of including disabled ones as a
+  permanently "offline" card.
+- **`docs/NETWORK.md`** — the inbound port (the control panel itself, configurable) and
+  every outbound connection (each configured device's protocol/port, plus the optional
+  HTTPS GitHub update check) documented for customers' IT/AV network reviews.
+- Test suite 101 → 112 (EPS driver: zone construction, `OUTPUTS`-bit parsing, `setOn`
+  dispatch, unconfigured-output rejection; config validation: duplicate output id/index,
+  out-of-range index; registry: a disabled device seeds no dashboard card).
+
 ## Known gaps / decisions pending
 
 - Default Electron icon everywhere (taskbar, tray, installer) — needs artwork.
@@ -148,11 +184,12 @@ typecheck/tests, both are now fixed):
 - TLS: deliberately not done — plain HTTP on a trusted LAN, per the network-model note in
   the README.
 - Multi-EPS: covered by simulation tests, never run on real multi-unit hardware.
+- Independent output control: verified against one real EPS unit; multiple EPS units each
+  with independent outputs enabled is simulation-tested only.
 - No GitHub Release published yet — Phase 4's one remaining step (see above).
 
 ## Not planned
 
-- Per-EPS-output control (no protocol yet — the schema leaves room).
 - Code signing (later).
 - Remote-support tooling.
 - Multi-site in one process.
