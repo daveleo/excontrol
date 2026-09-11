@@ -7,11 +7,11 @@ controllers as the install has.
 Supports **NovaStar H-series** and **COEX** processors, **Expromo EPS** power units, and
 **OBS Studio**. Every device is optional; you can have any number of each.
 
-> **Status: pre-release (v0.1.0).** The generalised core, the Windows installer, the
-> first-run setup wizard, and the update checker are all in place — see
-> [`docs/ROADMAP.md`](docs/ROADMAP.md) for what's left. No published release yet, so for
-> now build the installer yourself (`npm run desktop:dist`) or run from source (below). The
-> production predecessor for the Expromo Aarhus showroom is
+> **Status: early access (v0.2.0).** Download the Windows installer from the
+> [latest release](https://github.com/daveleo/excontrol/releases/latest), or build it
+> yourself (`npm run desktop:dist`) / run from source (below). See
+> [`docs/ROADMAP.md`](docs/ROADMAP.md) for what's still ahead. The production predecessor
+> for the Expromo Aarhus showroom is
 > [`showroom-control`](https://github.com/daveleo/showroom-control) (frozen at `v1.0`).
 >
 > The build is **unsigned** (no code-signing certificate yet) — Windows SmartScreen will

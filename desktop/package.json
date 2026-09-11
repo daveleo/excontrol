@@ -70,7 +70,8 @@
     "publish": {
       "provider": "github",
       "owner": "daveleo",
-      "repo": "excontrol"
+      "repo": "excontrol",
+      "releaseType": "release"
     }
   },
   "dependencies": {

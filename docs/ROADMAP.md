@@ -59,9 +59,15 @@
   `main` builds + typechecks + tests all four workspaces (`ubuntu-latest`); pushing a
   `vX.Y.Z` tag builds the Windows installer (`windows-latest`) and publishes it to that
   tag's GitHub Release via `electron-builder --publish always`, using the run's own
-  `GITHUB_TOKEN` (`contents: write`) — no manual `GH_TOKEN` needed. **Still needs the first
-  tag actually pushed** to produce a real release; until then, checks correctly report "No
-  published versions on GitHub" (verified — see below).
+  `GITHUB_TOKEN` (`contents: write`) — no manual `GH_TOKEN` needed.
+  - electron-builder's GitHub provider **defaults to creating a draft release**, which
+    electron-updater's checker does not see — `v0.2.0`'s first release run produced exactly
+    that (correct assets, wrong visibility) and had to be un-drafted by hand
+    (`gh release edit v0.2.0 --draft=false`). Fixed for every release after it:
+    `desktop/package.json`'s `build.publish` now sets `"releaseType": "release"`.
+- **v0.2.0 — first real GitHub Release, published.**
+  https://github.com/daveleo/excontrol/releases/tag/v0.2.0 — installer built + published by
+  the release workflow above, end to end, no manual packaging step.
 
 **Two real bugs found only by running the packaged app** (neither showed up in
 typecheck/tests, both are now fixed):
@@ -188,7 +194,6 @@ typecheck/tests, both are now fixed):
 - Multi-EPS: covered by simulation tests, never run on real multi-unit hardware.
 - Independent output control: verified against one real EPS unit; multiple EPS units each
   with independent outputs enabled is simulation-tested only.
-- No GitHub Release published yet — Phase 4's one remaining step (see above).
 
 ## Not planned
 
