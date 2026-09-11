@@ -8,6 +8,7 @@ import { ScheduleCard } from "./components/ScheduleCard.js";
 import { ShutdownModal } from "./components/ShutdownModal.js";
 import { SetupWizardLoader } from "./components/SetupWizard.js";
 import { UnlockModal } from "./components/UnlockModal.js";
+import { UpdateBanner } from "./components/UpdateBanner.js";
 import { verifyToken } from "./api.js";
 import { ensureUnlocked } from "./lib/unlock.js";
 
@@ -73,6 +74,8 @@ export function App() {
       </header>
 
       {!state && <p className="loading">Connecting…</p>}
+
+      {state?.updateInfo && <UpdateBanner info={state.updateInfo} />}
 
       {firstRun && firstRunLockedOut && (
         <p className="loading">This install has a settings password — unlock it to continue setup.</p>

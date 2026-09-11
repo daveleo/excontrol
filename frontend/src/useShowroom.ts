@@ -63,6 +63,8 @@ export function useShowroom(): Hook {
               return { ...prev, presets: msg.presets };
             case "schedule":
               return { ...prev, schedule: msg.schedule };
+            case "update":
+              return { ...prev, updateInfo: msg.info };
             default:
               return prev;
           }

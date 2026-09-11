@@ -1,19 +1,24 @@
 import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
-import { existsSync } from "node:fs";
+import { dirname, resolve, join } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { platform, release, arch, totalmem, freemem } from "node:os";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
+import { zipSync, strToU8 } from "fflate";
 import type {
   SetBrightnessBody, RecallPresetBody, SetBlackoutBody, AppPreset, ScheduleEntry,
-  SetupDevice, SetupSaveBody, SetupSaveResponse, LoginBody, SetPasswordBody,
+  SetupDevice, SetupSaveBody, SetupSaveResponse, LoginBody, SetPasswordBody, UpdateStatusBody,
 } from "@excontrol/shared";
+import { BRAND } from "@excontrol/shared";
 import { store } from "../core/state.js";
 import { getDriver, restartDevices } from "../core/registry.js";
 import { bus } from "../core/bus.js";
 import { getPresets, savePreset, deletePreset, applyPreset } from "../core/presets.js";
 import { getSchedule, setEntries, snooze } from "../core/schedule.js";
 import { powerDomain } from "../core/power.js";
-import { toSetupState, applySetup, getConfig, isSettingsLocked } from "../config.js";
+import {
+  toSetupState, applySetup, getConfig, isSettingsLocked, exportConfig, importConfig, getDataDir,
+} from "../config.js";
 import { probeDevice } from "../setup/probe.js";
 import { scanSubnets, localSubnets } from "../setup/scan.js";
 import {
@@ -241,19 +246,97 @@ export async function buildHttp() {
     }
   });
 
-  /* ---- misc ---- */
+  /* ---- config export / import / diagnostics ---- */
 
-  app.post<{ Body: { paused: boolean } }>("/api/updates/pause", async (req) => {
-    store.updatesPaused = Boolean(req.body?.paused);
-    bus.emit("broadcast", { t: "snapshot", state: store.snapshot() });
-    return { ok: true, paused: store.updatesPaused };
+  const dateStamp = () => new Date().toISOString().slice(0, 10);
+
+  app.get("/api/config/export", { preHandler: requireAuth }, async (_req, reply) => {
+    reply.header("content-disposition", `attachment; filename="excontrol-config-${dateStamp()}.json"`);
+    return exportConfig();
   });
 
-  app.post("/api/internal/reload", async (req, reply) => {
-    const ip = req.ip;
-    if (ip !== "127.0.0.1" && ip !== "::1" && ip !== "::ffff:127.0.0.1") {
+  app.post<{ Body: unknown }>("/api/config/import", { preHandler: requireAuth }, async (req, reply) => {
+    const prevPort = getConfig().app.httpPort;
+    const prevBind = getConfig().app.bind;
+    let cfg;
+    try {
+      cfg = importConfig(req.body);
+    } catch (e) {
+      return fail(reply, 400, e);
+    }
+    await restartDevices(cfg);
+    const portChanged = cfg.app.httpPort !== prevPort || cfg.app.bind !== prevBind;
+    bus.emit("broadcast", { t: "toast", level: "info", text: "Configuration imported" });
+    const res: SetupSaveResponse = { ok: true, configured: getConfig().devices.length > 0, portChanged, port: cfg.app.httpPort };
+    if (portChanged) {
+      reply.send(res);
+      setTimeout(() => {
+        restartHttpServer().catch((e) => log.error({ err: e }, "http restart after config import failed"));
+      }, 300);
+      return;
+    }
+    return res;
+  });
+
+  app.get("/api/diagnostics", { preHandler: requireAuth }, async (_req, reply) => {
+    const setup = toSetupState(); // secrets already redacted
+    const files: Record<string, Uint8Array> = {
+      "config-redacted.json": strToU8(JSON.stringify({ app: setup.app, devices: setup.devices }, null, 2)),
+      "state.json": strToU8(JSON.stringify(store.snapshot(), null, 2)),
+      "system.json": strToU8(JSON.stringify(
+        {
+          excontrolVersion: store.version,
+          node: process.version,
+          platform: platform(),
+          release: release(),
+          arch: arch(),
+          totalMemMB: Math.round(totalmem() / 1e6),
+          freeMemMB: Math.round(freemem() / 1e6),
+          uptimeMs: Date.now() - store.appInfo().startedAt,
+          generatedAt: new Date().toISOString(),
+        },
+        null,
+        2,
+      )),
+    };
+    const logPath = join(getDataDir(), "logs", `${BRAND.slug}.log`);
+    if (existsSync(logPath)) {
+      const lines = readFileSync(logPath, "utf8").split("\n");
+      files["logs/excontrol.log"] = strToU8(lines.slice(-2000).join("\n"));
+    }
+    const zipped = zipSync(files, { level: 6 });
+    reply.header("content-disposition", `attachment; filename="excontrol-diagnostics-${dateStamp()}.zip"`);
+    reply.type("application/zip");
+    return reply.send(Buffer.from(zipped));
+  });
+
+  /* ---- misc ---- */
+
+  // Must be async — a plain sync function here satisfies neither Fastify's callback-style
+  // nor promise-style preHandler contract, and the request hangs forever (found by testing
+  // the real update-status call, not in review: it just never returned).
+  const localhostOnly = async (req: any, reply: any) => {
+    if (req.ip !== "127.0.0.1" && req.ip !== "::1" && req.ip !== "::ffff:127.0.0.1") {
       return reply.code(403).send({ error: "localhost only" });
     }
+  };
+
+  /** Electron main pushes what electron-updater learns here — the backend has no idea
+   *  what GitHub Releases are, it just relays this into shared state for every browser. */
+  app.post<{ Body: UpdateStatusBody }>("/api/internal/update-status", { preHandler: localhostOnly }, async (req) => {
+    store.setUpdateInfo({
+      available: Boolean(req.body?.available),
+      version: req.body?.version,
+      currentVersion: store.version,
+      url: `https://github.com/${BRAND.repo}/releases`,
+      notes: req.body?.notes,
+      error: req.body?.error,
+      checkedAt: Date.now(),
+    });
+    return { ok: true };
+  });
+
+  app.post("/api/internal/reload", { preHandler: localhostOnly }, async () => {
     bus.emit("broadcast", { t: "reload", reason: "redeploy" });
     return { ok: true };
   });

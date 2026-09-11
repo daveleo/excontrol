@@ -27,14 +27,34 @@
     "productName": "eXcontrol",
     "copyright": "Copyright 2026 Expromo",
     "electronVersion": "31.7.7",
-    "directories": { "output": "release", "buildResources": "build" },
-    "files": ["out/**/*", "package.json"],
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "out/**/*",
+      "package.json",
+      "node_modules/**/*"
+    ],
     "extraResources": [
-      { "from": "../frontend/dist", "to": "frontend" },
-      { "from": "../config/excontrol.config.example.json", "to": "excontrol.config.example.json" }
+      {
+        "from": "../frontend/dist",
+        "to": "frontend"
+      },
+      {
+        "from": "../config/excontrol.config.example.json",
+        "to": "excontrol.config.example.json"
+      }
     ],
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "artifactName": "eXcontrol-Setup-${version}.${ext}"
     },
     "nsis": {
@@ -47,6 +67,13 @@
       "runAfterFinish": true,
       "include": "build/installer.nsh"
     },
-    "publish": { "provider": "github", "owner": "daveleo", "repo": "excontrol" }
+    "publish": {
+      "provider": "github",
+      "owner": "daveleo",
+      "repo": "excontrol"
+    }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
   }
 }

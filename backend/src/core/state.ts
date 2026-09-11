@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import type { DeviceState, PowerDomain, AppState, AppInfo } from "@excontrol/shared";
+import type { DeviceState, PowerDomain, AppState, AppInfo, UpdateInfo } from "@excontrol/shared";
 import { BRAND } from "@excontrol/shared";
 import { bus, type DevicePatch } from "./bus.js";
 import { getConfig, isConfigured, isSettingsLocked } from "../config.js";
@@ -25,7 +25,13 @@ class Store {
   private devices = new Map<string, DeviceState>();
   private domains = new Map<string, PowerDomain>();
   readonly startedAt = Date.now();
-  updatesPaused = false;
+  private updateInfo: UpdateInfo | null = null;
+
+  /** Electron main pushes what electron-updater learns here, via /api/internal/update-status. */
+  setUpdateInfo(info: UpdateInfo): void {
+    this.updateInfo = info;
+    bus.emit("broadcast", { t: "update", info });
+  }
 
   get version(): string {
     return pkgVersion();
@@ -107,7 +113,7 @@ class Store {
       powerDomains: this.domainsList(),
       presets: cfg.presets,
       schedule: cfg.schedule,
-      updatesPaused: this.updatesPaused,
+      updateInfo: this.updateInfo,
     };
   }
 }

@@ -5,6 +5,8 @@ export * from "./branding.js";
 export * from "./schedule.js";
 export * from "./setup.js";
 export * from "./auth.js";
+export * from "./update.js";
+import type { UpdateInfo } from "./update.js";
 
 /* ---------- devices ---------- */
 
@@ -140,7 +142,8 @@ export interface AppState {
   powerDomains: PowerDomain[];
   presets: AppPreset[];
   schedule: Schedule;
-  updatesPaused: boolean;
+  /** null outside Electron, or before the first check has completed */
+  updateInfo: UpdateInfo | null;
 }
 
 /* ---------- WebSocket messages (server → client) ---------- */
@@ -151,6 +154,7 @@ export type ServerMessage =
   | { t: "power"; domains: PowerDomain[] }
   | { t: "presets"; presets: AppPreset[] }
   | { t: "schedule"; schedule: Schedule }
+  | { t: "update"; info: UpdateInfo }
   | { t: "reload"; reason: string }
   | { t: "toast"; level: "info" | "warn" | "error"; text: string };
 

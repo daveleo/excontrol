@@ -28,7 +28,6 @@ export const applyPreset = (id: string) => post(`/api/presets/${id}/apply`, {});
 export const saveSchedule = (entries: ScheduleEntry[]) => put("/api/schedule", { entries });
 export const snoozeShutdown = (hours: number) => post("/api/schedule/snooze", { hours });
 export const cancelShutdownExtension = () => post("/api/schedule/snooze", { clear: true });
-export const setUpdatesPaused = (paused: boolean) => post("/api/updates/pause", { paused });
 
 /* ---- setup wizard ---- */
 export const getSetupState = () => send("GET", "/api/setup/state") as Promise<SetupState>;
@@ -56,6 +55,29 @@ export async function setSettingsPassword(body: SetPasswordBody): Promise<void> 
   await post("/api/auth/set-password", body);
   if (!body.newPassword) clearToken(); // lock removed — nothing to hold a token for
 }
+
+/* ---- config backup / diagnostics (file downloads — need the auth header, so no plain <a href>) ---- */
+
+async function downloadAuthed(url: string, fallbackName: string): Promise<void> {
+  const token = getToken();
+  const res = await fetch(url, { headers: token ? { authorization: `Bearer ${token}` } : undefined });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error ?? `HTTP ${res.status}`);
+  }
+  const blob = await res.blob();
+  const match = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = match?.[1] ?? fallbackName;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+}
+
+export const exportConfig = () => downloadAuthed("/api/config/export", "excontrol-config.json");
+export const downloadDiagnostics = () => downloadAuthed("/api/diagnostics", "excontrol-diagnostics.zip");
+
+export const importConfig = (body: unknown) => post("/api/config/import", body) as Promise<SetupSaveResponse>;
 
 const post = (url: string, body: unknown) => send("POST", url, body);
 const put = (url: string, body: unknown) => send("PUT", url, body);

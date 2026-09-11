@@ -1,6 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { DeviceType, SetupDevice, SetupState, SetupZone, ProbeResult, ScanHit } from "@excontrol/shared";
-import { getSetupState, probeDevice, scanNetwork, saveSetup, setSettingsPassword, login } from "../api.js";
+import {
+  getSetupState, probeDevice, scanNetwork, saveSetup, setSettingsPassword, login, verifyToken,
+  exportConfig, importConfig, downloadDiagnostics,
+} from "../api.js";
+import { ensureUnlocked } from "../lib/unlock.js";
 
 const TYPE_LABEL: Record<DeviceType, string> = {
   "novastar-h": "NovaStar H-series",
@@ -284,6 +288,7 @@ function AppSettingsSection({
             Changing the port reconnects everyone automatically.
           </p>
           <SecurityPassword locked={locked} onLockedChange={onLockedChange} />
+          <BackupSection locked={locked} />
         </div>
       )}
     </section>
@@ -368,6 +373,70 @@ function SecurityPassword({ locked, onLockedChange }: { locked: boolean; onLocke
       <p className="hint muted">
         Zone control, presets and power stay reachable from any phone on the network without this password —
         it only protects the setup / preset-editing / schedule-editing screens.
+      </p>
+    </div>
+  );
+}
+
+function BackupSection({ locked }: { locked: boolean }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const run = (key: string, fn: () => Promise<void>) => async () => {
+    if (!(await ensureUnlocked(locked, verifyToken))) return;
+    setBusy(key);
+    setMsg(null);
+    try {
+      await fn();
+      if (key !== "import") setMsg({ ok: true, text: "Downloaded." });
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const onImportFile = run("import", async () => {
+    const file = fileRef.current?.files?.[0];
+    if (!file) return;
+    const parsed: unknown = JSON.parse(await file.text());
+    const res = await importConfig(parsed);
+    if (res.portChanged) {
+      setMsg({ ok: true, text: `Imported — reconnecting on port ${res.port}…` });
+      setTimeout(() => (location.href = `${location.protocol}//${location.hostname}:${res.port}/`), 1200);
+    } else {
+      setMsg({ ok: true, text: "Imported — reloading…" });
+      setTimeout(() => location.reload(), 1000);
+    }
+  });
+
+  return (
+    <div className="wiz-security">
+      <div className="wd-zones-head">
+        <span>Backup</span>
+        <span className="muted small">Move this setup to a new PC, or send diagnostics for support.</span>
+      </div>
+      <div className="row">
+        <button onClick={run("export", exportConfig)} disabled={!!busy}>
+          {busy === "export" ? "Exporting…" : "Export config"}
+        </button>
+        <button onClick={() => fileRef.current?.click()} disabled={!!busy}>
+          {busy === "import" ? "Importing…" : "Import config file"}
+        </button>
+        <button onClick={run("diag", downloadDiagnostics)} disabled={!!busy}>
+          {busy === "diag" ? "Preparing…" : "Download diagnostics"}
+        </button>
+      </div>
+      <input
+        ref={fileRef} type="file" accept="application/json" hidden
+        onChange={(e) => { if (e.target.files?.[0]) void onImportFile(); e.target.value = ""; }}
+      />
+      {msg && <span className={msg.ok ? "probe-ok" : "probe-bad"}>{msg.text}</span>}
+      <p className="hint muted">
+        The exported file has device credentials in plain text — keep it somewhere private. Importing
+        replaces every device, preset and schedule entry here (this install's settings password is kept).
+        Diagnostics redacts secrets and is safe to share with support.
       </p>
     </div>
   );

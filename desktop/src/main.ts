@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import { startServer, type RunningServer } from "@excontrol/backend";
 import { BRAND } from "@excontrol/shared";
+import { initUpdater, type Updater } from "./updater.js";
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -24,6 +25,7 @@ process.env.EXCONTROL_FRONTEND_DIR = app.isPackaged
 let server: RunningServer | null = null;
 let win: BrowserWindow | null = null;
 let tray: Tray | null = null;
+let updater: Updater | null = null;
 let quitting = false;
 
 const boundsFile = join(dataDir, "window.json");
@@ -93,7 +95,8 @@ function buildTray(): void {
         click: () => clipboard.writeText(server?.url.replace("127.0.0.1", localIp()) ?? ""),
       },
       { type: "separator" },
-      { label: "Check for updates…", click: () => void shell.openExternal(`https://github.com/${BRAND.repo}/releases`) },
+      { label: "Check for updates…", click: () => updater?.checkForUpdates(true) },
+      { label: "View releases page", click: () => void shell.openExternal(`https://github.com/${BRAND.repo}/releases`) },
       { type: "separator" },
       {
         label: "Quit",
@@ -121,8 +124,13 @@ async function main(): Promise<void> {
     return;
   }
 
+  updater = initUpdater(() => server, dataDir);
+
   buildTray();
   showWindow();
+
+  // give the window a moment to settle before the first (silent, non-manual) check
+  setTimeout(() => updater?.checkForUpdates(false), 8000);
 
   app.on("second-instance", showWindow);
   app.on("activate", showWindow);

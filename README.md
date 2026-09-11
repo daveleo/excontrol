@@ -7,12 +7,17 @@ controllers as the install has.
 Supports **NovaStar H-series** and **COEX** processors, **Expromo EPS** power units, and
 **OBS Studio**. Every device is optional; you can have any number of each.
 
-> **Status: pre-release (v0.1.0).** The generalised core, the Windows installer and the
-> first-run setup wizard are in place; the update checker and diagnostics export are still
-> to come — see [`docs/ROADMAP.md`](docs/ROADMAP.md). No published release yet, so for now
-> build the installer yourself (`npm run desktop:dist`) or run from source (below). The
+> **Status: pre-release (v0.1.0).** The generalised core, the Windows installer, the
+> first-run setup wizard, and the update checker are all in place — see
+> [`docs/ROADMAP.md`](docs/ROADMAP.md) for what's left. No published release yet, so for
+> now build the installer yourself (`npm run desktop:dist`) or run from source (below). The
 > production predecessor for the Expromo Aarhus showroom is
 > [`showroom-control`](https://github.com/daveleo/showroom-control) (frozen at `v1.0`).
+>
+> The build is **unsigned** (no code-signing certificate yet) — Windows SmartScreen will
+> show "Windows protected your PC" the first time someone runs the installer. Click
+> **More info → Run anyway**. This is expected for every pre-release build; it'll go away
+> once the project has a signing certificate.
 
 ## What it does
 
@@ -30,6 +35,13 @@ Supports **NovaStar H-series** and **COEX** processors, **Expromo EPS** power un
   open to any phone on the network either way — it only protects reconfiguration.
 - **Integrates with Bitfocus Companion today** via its Generic HTTP module — see
   [`docs/COMPANION.md`](docs/COMPANION.md).
+- **Updates itself** — checks public GitHub Releases on launch and on demand (tray →
+  Check for updates); *Install now / Skip this version / Remind me later*, never a silent
+  auto-install. Every open browser sees a small banner when one's waiting, even though
+  only the control PC can run the installer.
+- **Backup & diagnostics** (Devices → App settings → Backup) — export the whole config
+  (including device credentials, to pre-stage a new PC) or import one back; download a
+  redacted diagnostics zip (config + live state + recent logs) to send to support.
 
 ## Run from source
 

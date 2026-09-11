@@ -143,7 +143,7 @@ function normalise(p: Partial<AppConfig>): AppConfig {
   return {
     app: {
       name: p.app?.name || BRAND.name,
-      httpPort: p.app?.httpPort || 8080,
+      httpPort: Number(p.app?.httpPort) || 8080,
       bind: p.app?.bind || "0.0.0.0",
       settingsPasswordHash: p.app?.settingsPasswordHash,
       settingsPasswordSalt: p.app?.settingsPasswordSalt,
@@ -261,12 +261,10 @@ export function applySetup(body: SetupSaveBody): AppConfig {
     if (seenIds.has(id)) throw new Error(`duplicate device id "${id}"`);
     seenIds.add(id);
   }
-  const port = Number(body.app?.httpPort ?? current.app.httpPort) || 8080;
-  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`port must be 1-65535 (got ${body.app?.httpPort})`);
   const next: AppConfig = {
     app: {
       name: (body.app?.name ?? current.app.name) || BRAND.name,
-      httpPort: port,
+      httpPort: Number(body.app?.httpPort ?? current.app.httpPort) || 8080,
       bind: body.app?.bind ?? current.app.bind ?? "0.0.0.0",
       // the wizard doesn't manage the settings password — carry it through untouched
       settingsPasswordHash: current.app.settingsPasswordHash,
@@ -276,10 +274,38 @@ export function applySetup(body: SetupSaveBody): AppConfig {
     presets: current.presets,
     schedule: current.schedule,
   };
-  return saveConfig(next); // saveConfig runs validate()
+  return saveConfig(next); // saveConfig runs validate(), incl. the port range check
+}
+
+/** Full config for export/pre-staging — device secrets included (that's the point), the
+ *  settings password excluded (it's per-install, it shouldn't travel with the site config). */
+export function exportConfig(): Record<string, unknown> {
+  const { settingsPasswordHash: _h, settingsPasswordSalt: _s, ...app } = current.app;
+  return { ...current, app };
+}
+
+/** Import a whole config file (from exportConfig, or hand-written to this shape). This
+ *  machine's settings password (if any) is always kept — a password doesn't travel with
+ *  an imported site config, even if the file happens to carry one. */
+export function importConfig(raw: unknown): AppConfig {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new Error("not a valid eXcontrol config file");
+  }
+  const parsed = normalise(raw as Partial<AppConfig>);
+  const next: AppConfig = {
+    ...parsed,
+    app: {
+      ...parsed.app,
+      settingsPasswordHash: current.app.settingsPasswordHash,
+      settingsPasswordSalt: current.app.settingsPasswordSalt,
+    },
+  };
+  return saveConfig(next);
 }
 
 function validate(cfg: AppConfig): void {
+  const port = cfg.app.httpPort;
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`config: httpPort must be 1-65535 (got ${port})`);
   const ids = new Set<string>();
   for (const d of cfg.devices) {
     if (!d.id) throw new Error("config: a device is missing its id");
