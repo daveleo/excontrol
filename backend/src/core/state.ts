@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import type { DeviceState, PowerDomain, AppState, AppInfo } from "@excontrol/shared";
 import { BRAND } from "@excontrol/shared";
 import { bus, type DevicePatch } from "./bus.js";
-import { getConfig, isConfigured } from "../config.js";
+import { getConfig, isConfigured, isSettingsLocked } from "../config.js";
 import { log } from "../logger.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -95,6 +95,7 @@ class Store {
       version: this.version,
       startedAt: this.startedAt,
       configured: isConfigured(),
+      settingsLocked: isSettingsLocked(),
     };
   }
 

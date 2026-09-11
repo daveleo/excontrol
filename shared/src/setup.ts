@@ -39,6 +39,9 @@ export interface SetupDevice {
 export interface SetupState {
   configured: boolean;
   app: { name: string; httpPort: number; bind: string };
+  /** true → this endpoint itself required a password to reach; shown so the wizard can
+   *  offer "change" instead of "set" for the settings password. */
+  settingsLocked: boolean;
   devices: SetupDevice[];
   /** default port per device type, for pre-filling a new device */
   defaultPorts: Record<DeviceType, number>;
@@ -47,6 +50,14 @@ export interface SetupState {
 export interface SetupSaveBody {
   app?: Partial<{ name: string; httpPort: number; bind: string }>;
   devices: SetupDevice[];
+}
+
+export interface SetupSaveResponse {
+  ok: boolean;
+  configured: boolean;
+  /** the HTTP port changed — the server rebinds itself and the client must follow it */
+  portChanged: boolean;
+  port: number;
 }
 
 /** What a probe found. `ok` drives the green/red state; `detail` is the human line. */

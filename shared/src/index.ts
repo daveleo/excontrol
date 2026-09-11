@@ -4,6 +4,7 @@
 export * from "./branding.js";
 export * from "./schedule.js";
 export * from "./setup.js";
+export * from "./auth.js";
 
 /* ---------- devices ---------- */
 
@@ -129,6 +130,8 @@ export interface AppInfo {
   startedAt: number;
   /** false → the setup wizard should be shown */
   configured: boolean;
+  /** true → device setup / preset & schedule editing require the settings password */
+  settingsLocked: boolean;
 }
 
 export interface AppState {

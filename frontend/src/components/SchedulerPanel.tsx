@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { AppState, Schedule, ScheduleEntry, ScheduleAction } from "@excontrol/shared";
 import { Modal } from "./Modal.js";
-import { saveSchedule } from "../api.js";
+import { saveSchedule, verifyToken } from "../api.js";
+import { ensureUnlocked } from "../lib/unlock.js";
 
 const DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
@@ -26,6 +27,7 @@ export function SchedulerPanel({ state, onClose }: { state: AppState; onClose: (
     );
 
   const save = async () => {
+    if (!(await ensureUnlocked(state.app.settingsLocked, verifyToken))) return;
     setSaving(true);
     try {
       const res = (await saveSchedule(entries)) as Schedule;

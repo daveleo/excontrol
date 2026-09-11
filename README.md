@@ -25,6 +25,11 @@ Supports **NovaStar H-series** and **COEX** processors, **Expromo EPS** power un
 - **Scheduler** — power on/off or apply a preset on a daily/weekly schedule, with a
   15-minute shutdown countdown and "extend by an hour".
 - **Live** — every open screen shows the same state, updated in seconds, no refresh.
+- **Settings password (optional)** — lock device setup and preset/schedule editing behind
+  a shared password from the Devices screen. Zone control, power and preset *apply* stay
+  open to any phone on the network either way — it only protects reconfiguration.
+- **Integrates with Bitfocus Companion today** via its Generic HTTP module — see
+  [`docs/COMPANION.md`](docs/COMPANION.md).
 
 ## Run from source
 
@@ -65,6 +70,27 @@ by hand instead, copy `config/excontrol.config.example.json` to
 - `poweredBy` → which EPS powers this device; `null` = always on.
 - The whole file (including presets and schedule, which the UI edits) is one JSON document
   and is **not** committed — it holds device credentials.
+
+## Network & security model
+
+eXcontrol assumes a **dedicated, trusted LAN** (a venue's AV network, not a shared office
+Wi-Fi) — it runs on plain HTTP, no TLS. On a private network the usual reasons for HTTPS
+(eavesdropping, tampering in transit) don't really apply, and a self-signed cert would just
+mean every phone has to click through a browser warning once. If an install ever needs to
+be reachable from outside that trusted network, put it behind a VPN/Tailscale rather than
+exposing it directly.
+
+What *is* worth locking down on a shared LAN: reconfiguration. Setting a **settings
+password** (Devices → App settings → Settings password) requires it for the Devices
+screen and for editing presets/schedules; brightness, blackout, power and applying an
+existing preset stay reachable from any phone with no password, by design. The password is
+stored as a salted hash in the config file, never in plaintext. **If it's forgotten**, stop
+the app and delete the `settingsPasswordHash` / `settingsPasswordSalt` keys from
+`excontrol.config.json` — that removes the lock, same as any other local device's
+"physical access resets it" recovery.
+
+The control panel's **port** is configurable from the same App settings section; changing
+it reconnects every open browser to the new port automatically.
 
 ## License
 

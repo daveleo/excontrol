@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { DeviceType, SetupDevice, SetupState, SetupZone, ProbeResult, ScanHit } from "@excontrol/shared";
-import { getSetupState, probeDevice, scanNetwork, saveSetup } from "../api.js";
+import { getSetupState, probeDevice, scanNetwork, saveSetup, setSettingsPassword, login } from "../api.js";
 
 const TYPE_LABEL: Record<DeviceType, string> = {
   "novastar-h": "NovaStar H-series",
@@ -29,6 +29,7 @@ export function SetupWizard({
   epsOff?: Set<string>;
 }) {
   const [app, setApp] = useState(initial.app);
+  const [locked, setLocked] = useState(initial.settingsLocked);
   const [devices, setDevices] = useState<SetupDevice[]>(initial.devices);
   const [probes, setProbes] = useState<ProbeCache>({});
   const [saving, setSaving] = useState(false);
@@ -123,13 +124,20 @@ export function SetupWizard({
     onClose();
   };
 
+  const [reconnecting, setReconnecting] = useState<number | null>(null);
+
   const save = async () => {
     if (idError) return;
     if (initial.configured && devices.length === 0 && !confirm("This removes every device. The setup wizard will reappear until you add one. Continue?")) return;
     setSaving(true);
     setSaveErr(null);
     try {
-      await saveSetup({ app, devices });
+      const res = await saveSetup({ app, devices });
+      if (res.portChanged) {
+        setReconnecting(res.port);
+        followToPort(res.port);
+        return; // don't close — we're about to navigate away
+      }
       onClose();
     } catch (e) {
       setSaveErr(e instanceof Error ? e.message : String(e));
@@ -138,8 +146,29 @@ export function SetupWizard({
     }
   };
 
+  /** The server rebinds to the new port a moment after responding — poll for it, then follow. */
+  const followToPort = (port: number) => {
+    const target = `${location.protocol}//${location.hostname}:${port}/`;
+    const tryOnce = (attempt: number) => {
+      fetch(`${location.protocol}//${location.hostname}:${port}/health`, { signal: AbortSignal.timeout(1500) })
+        .then(() => (location.href = target))
+        .catch(() => (attempt < 15 ? setTimeout(() => tryOnce(attempt + 1), 500) : (location.href = target)));
+    };
+    setTimeout(() => tryOnce(0), 500);
+  };
+
   const epsDevices = devices.filter((d) => d.type === "expromo-eps");
   const knownHosts = new Set(devices.map((d) => `${d.host}:${d.port}`));
+
+  if (reconnecting != null) {
+    return (
+      <div className="wizard">
+        <div className="wiz-inner">
+          <p className="loading">Saved. Reconnecting on port {reconnecting}…</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="wizard">
@@ -157,6 +186,13 @@ export function SetupWizard({
             <button className="wiz-x" onClick={close} aria-label="Close">✕</button>
           )}
         </header>
+
+        <AppSettingsSection
+          app={app}
+          onChange={(patch) => setApp((a) => ({ ...a, ...patch }))}
+          locked={locked}
+          onLockedChange={setLocked}
+        />
 
         <section className="wiz-scan">
           <button className="primary" disabled={scan.running} onClick={runScan}>
@@ -212,6 +248,127 @@ export function SetupWizard({
           </button>
         </footer>
       </div>
+    </div>
+  );
+}
+
+function AppSettingsSection({
+  app, onChange, locked, onLockedChange,
+}: {
+  app: SetupState["app"];
+  onChange: (patch: Partial<SetupState["app"]>) => void;
+  locked: boolean;
+  onLockedChange: (locked: boolean) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="wiz-app-settings">
+      <button className="linkish wiz-app-toggle" onClick={() => setOpen((v) => !v)}>
+        {open ? "▾" : "▸"} App settings — name, port, settings password
+      </button>
+      {open && (
+        <div className="wiz-app-grid">
+          <label className="field">
+            <span>Display name</span>
+            <input value={app.name} onChange={(e) => onChange({ name: e.target.value })} />
+          </label>
+          <label className="field narrow">
+            <span>Port</span>
+            <input
+              type="number" value={app.httpPort}
+              onChange={(e) => onChange({ httpPort: Number(e.target.value) || app.httpPort })}
+            />
+          </label>
+          <p className="muted small wiz-app-note">
+            The control panel's address on this network, e.g. <code>http://&lt;this-PC&apos;s-IP&gt;:{app.httpPort}</code>.
+            Changing the port reconnects everyone automatically.
+          </p>
+          <SecurityPassword locked={locked} onLockedChange={onLockedChange} />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SecurityPassword({ locked, onLockedChange }: { locked: boolean; onLockedChange: (locked: boolean) => void }) {
+  const [mode, setMode] = useState<null | "set" | "change" | "remove">(null);
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const reset = () => { setMode(null); setCurrent(""); setNext(""); setConfirm(""); };
+
+  const submit = async () => {
+    if (mode === "remove") {
+      if (!current) return setMsg({ ok: false, text: "Enter the current password to remove it." });
+    } else if (!next || next !== confirm) {
+      return setMsg({ ok: false, text: "New passwords must match and can't be empty." });
+    }
+    setBusy(true);
+    setMsg(null);
+    try {
+      await setSettingsPassword({
+        currentPassword: locked ? current : undefined,
+        newPassword: mode === "remove" ? null : next,
+      });
+      if (mode === "remove") {
+        onLockedChange(false);
+      } else {
+        await login(next); // stay authenticated in this session under the new password
+        onLockedChange(true);
+      }
+      setMsg({ ok: true, text: mode === "remove" ? "Password removed." : "Password saved." });
+      reset();
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="wiz-security">
+      <div className="wd-zones-head">
+        <span>Settings password</span>
+        <span className="muted small">
+          {locked ? "Set — required to reach Devices, and to edit presets or the schedule." : "Not set — the settings are open to anyone on the network."}
+        </span>
+      </div>
+
+      {!mode && (
+        <div className="row">
+          {!locked && <button onClick={() => setMode("set")}>Set a password</button>}
+          {locked && <button onClick={() => setMode("change")}>Change password</button>}
+          {locked && <button onClick={() => setMode("remove")}>Remove password</button>}
+        </div>
+      )}
+
+      {mode && (
+        <div className="wiz-security-form">
+          {locked && (
+            <input type="password" placeholder="Current password" value={current} onChange={(e) => setCurrent(e.target.value)} />
+          )}
+          {mode !== "remove" && (
+            <>
+              <input type="password" placeholder="New password" value={next} onChange={(e) => setNext(e.target.value)} />
+              <input type="password" placeholder="Confirm new password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+            </>
+          )}
+          <div className="row">
+            <button onClick={reset} disabled={busy}>Cancel</button>
+            <button className="primary" onClick={submit} disabled={busy}>
+              {busy ? "Saving…" : mode === "remove" ? "Remove" : "Save password"}
+            </button>
+          </div>
+        </div>
+      )}
+      {msg && <span className={msg.ok ? "probe-ok" : "probe-bad"}>{msg.text}</span>}
+      <p className="hint muted">
+        Zone control, presets and power stay reachable from any phone on the network without this password —
+        it only protects the setup / preset-editing / schedule-editing screens.
+      </p>
     </div>
   );
 }

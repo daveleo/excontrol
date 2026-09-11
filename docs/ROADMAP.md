@@ -43,13 +43,29 @@
 
 ## Hardening (ongoing, alongside the phases)
 
-- **Test suite**: 2 → 69 tests — schedule math, config validation + secret redaction,
-  the power-domain state machine (every branch) incl. multi-EPS, preset application, and
-  every driver's `probe()` error decoding against fake servers. Test files are type-checked.
+- **Test suite**: 2 → 80 tests — schedule math, config validation + secret redaction,
+  the power-domain state machine (every branch) incl. multi-EPS, preset application, the
+  settings-password/auth routes end-to-end (Fastify `.inject()`), and every driver's
+  `probe()` error decoding against fake servers. Test files are type-checked.
 - **Fixed** (found by hardware + review): power domain now shows "starting up" (not a
   fault) when eXcontrol boots next to an already-on wall; `deletePreset` disables schedule
   entries that referenced it; wizard re-points `poweredBy` on an EPS rename; brightness
   slider debounces keyboard input.
+- **Multi-device — validated on real hardware**: the showroom now runs **two H-series
+  controllers** simultaneously (`h9` on the power domain, a second always-on `H-2`) plus
+  MX40 and EPS, confirmed via CBLATest. Multi-EPS is still simulation-tested only.
+- **Settings password**: an optional shared password (Devices → App settings) gates
+  device setup and preset/schedule *editing* only — zone control, power and preset
+  *apply* stay open to any phone on the LAN. Salted-hash storage, bearer tokens
+  (in-memory, 30-day TTL), `POST /api/auth/{login,verify,set-password}`. Forgotten
+  password recovers by deleting the hash/salt from the config file.
+- **Configurable port**: settable from the same App settings section; the backend rebinds
+  its HTTP listener live (`registerHttpRestarter`/`restartHttpServer`) and the browser
+  follows automatically. Devices don't restart for a pure port change.
+- **Bitfocus Companion**: works today via its Generic HTTP module against eXcontrol's
+  existing control endpoints — no eXcontrol changes needed. See
+  [`COMPANION.md`](COMPANION.md). A native `@companion-module` package (dropdowns, live
+  feedback) is future work, not started.
 
 ## Phase 4 — update checker
 
@@ -61,13 +77,12 @@
 
 ## Known gaps / decisions pending
 
-- **LAN exposure**: `/api/setup/save`, `/api/power`, preset + schedule writes have no auth
-  and the server binds `0.0.0.0` — any device on the network can reconfigure the install.
-- Changing `app.httpPort` in the wizard needs a full app restart (drivers restart in
-  process; the HTTP listener does not rebind).
-- Default Electron icon everywhere (taskbar, tray, installer).
-- Subnet scan sweeps every LAN interface incl. Tailscale/virtual adapters.
-- Multi-H / multi-EPS: covered by simulation tests, never run on real multi-device hardware.
+- Default Electron icon everywhere (taskbar, tray, installer) — needs artwork.
+- Subnet scan sweeps every LAN interface incl. Tailscale/virtual adapters (harmless, just
+  slower and noisier than scoping to real LANs only).
+- TLS: deliberately not done — plain HTTP on a trusted LAN, per the network-model note in
+  the README.
+- Multi-EPS: covered by simulation tests, never run on real multi-unit hardware.
 
 ## Phase 5 — portability & support
 

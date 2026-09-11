@@ -1,6 +1,8 @@
 import type {
-  AppPreset, ScheduleEntry, SetupState, SetupDevice, SetupSaveBody, ProbeResult, ScanHit,
+  AppPreset, ScheduleEntry, SetupState, SetupDevice, SetupSaveBody, SetupSaveResponse,
+  ProbeResult, ScanHit, AuthStatus, SetPasswordBody,
 } from "@excontrol/shared";
+import { getToken, setToken, clearToken } from "./lib/auth.js";
 
 const ZONE = (z?: string) => z || "-"; // "-" => the device's first/only zone
 
@@ -33,17 +35,40 @@ export const getSetupState = () => send("GET", "/api/setup/state") as Promise<Se
 export const probeDevice = (d: SetupDevice) => post("/api/setup/probe", d) as Promise<ProbeResult>;
 export const scanNetwork = () =>
   send("GET", "/api/setup/scan") as Promise<{ subnets: string[]; hits: ScanHit[] }>;
-export const saveSetup = (body: SetupSaveBody) =>
-  post("/api/setup/save", body) as Promise<{ ok: boolean; configured: boolean }>;
+export const saveSetup = (body: SetupSaveBody) => post("/api/setup/save", body) as Promise<SetupSaveResponse>;
+
+/* ---- settings lock ---- */
+export const authStatus = () => send("GET", "/api/auth/status") as Promise<AuthStatus>;
+export async function login(password: string): Promise<void> {
+  const { token } = (await post("/api/auth/login", { password })) as { token: string };
+  setToken(token);
+}
+export async function verifyToken(): Promise<boolean> {
+  if (!getToken()) return false;
+  try {
+    const { valid } = (await send("GET", "/api/auth/verify")) as { valid: boolean };
+    return valid;
+  } catch {
+    return false;
+  }
+}
+export async function setSettingsPassword(body: SetPasswordBody): Promise<void> {
+  await post("/api/auth/set-password", body);
+  if (!body.newPassword) clearToken(); // lock removed — nothing to hold a token for
+}
 
 const post = (url: string, body: unknown) => send("POST", url, body);
 const put = (url: string, body: unknown) => send("PUT", url, body);
 const del = (url: string) => send("DELETE", url);
 
 async function send(method: string, url: string, body?: unknown): Promise<unknown> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (body !== undefined) headers["content-type"] = "application/json";
+  if (token) headers["authorization"] = `Bearer ${token}`;
   const res = await fetch(url, {
     method,
-    headers: body === undefined ? undefined : { "content-type": "application/json" },
+    headers: Object.keys(headers).length ? headers : undefined,
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const json = await res.json().catch(() => ({}));

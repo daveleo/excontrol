@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import type { AppState, AppPreset, PresetAction, DeviceState } from "@excontrol/shared";
 import { ALWAYS_ON_DOMAIN } from "@excontrol/shared";
 import { Modal } from "./Modal.js";
-import { savePreset, deletePreset, applyPreset } from "../api.js";
+import { savePreset, deletePreset, applyPreset, verifyToken } from "../api.js";
+import { ensureUnlocked } from "../lib/unlock.js";
 
 /** A target row the editor can toggle on/off. */
 interface Row {
@@ -54,6 +55,15 @@ export function PresetsPanel({ state, onClose }: { state: AppState; onClose: () 
     try { await fn(); } catch { /* toast */ } finally { setBusy(null); }
   };
 
+  const edit = async (p: AppPreset | "new") => {
+    if (!(await ensureUnlocked(state.app.settingsLocked, verifyToken))) return;
+    setEditing(p);
+  };
+  const remove = async (id: string) => {
+    if (!(await ensureUnlocked(state.app.settingsLocked, verifyToken))) return;
+    await act(() => deletePreset(id), id)();
+  };
+
   if (editing) {
     return (
       <PresetEditor
@@ -87,14 +97,14 @@ export function PresetsPanel({ state, onClose }: { state: AppState; onClose: () 
             <button className="primary" disabled={busy === p.id} onClick={act(() => applyPreset(p.id), p.id)}>
               Apply
             </button>
-            <button disabled={busy === p.id} onClick={() => setEditing(p)}>Edit</button>
-            <button disabled={busy === p.id} onClick={act(() => deletePreset(p.id), p.id)}>Delete</button>
+            <button disabled={busy === p.id} onClick={() => void edit(p)}>Edit</button>
+            <button disabled={busy === p.id} onClick={() => void remove(p.id)}>Delete</button>
           </div>
         </div>
       ))}
 
       <div className="modal-actions">
-        <button onClick={() => setEditing("new")}>+ New preset</button>
+        <button onClick={() => void edit("new")}>+ New preset</button>
       </div>
     </Modal>
   );

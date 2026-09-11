@@ -69,7 +69,14 @@ export interface ObsConfig extends BaseDeviceConfig {
 export type DeviceConfig = HConfig | CoexConfig | EpsConfig | ObsConfig;
 
 export interface AppConfig {
-  app: { name: string; httpPort: number; bind: string };
+  app: {
+    name: string;
+    httpPort: number;
+    bind: string;
+    /** scrypt hash + salt of the settings password, hex. Absent = settings unlocked. */
+    settingsPasswordHash?: string;
+    settingsPasswordSalt?: string;
+  };
   devices: DeviceConfig[];
   presets: AppPreset[];
   schedule: Schedule;
@@ -138,11 +145,18 @@ function normalise(p: Partial<AppConfig>): AppConfig {
       name: p.app?.name || BRAND.name,
       httpPort: p.app?.httpPort || 8080,
       bind: p.app?.bind || "0.0.0.0",
+      settingsPasswordHash: p.app?.settingsPasswordHash,
+      settingsPasswordSalt: p.app?.settingsPasswordSalt,
     },
     devices: Array.isArray(p.devices) ? (p.devices as DeviceConfig[]) : [],
     presets: Array.isArray(p.presets) ? p.presets : [],
     schedule: p.schedule && Array.isArray(p.schedule.entries) ? p.schedule : { entries: [] },
   };
+}
+
+/** True once a settings password is set — the setup/preset/schedule *editing* endpoints require it. */
+export function isSettingsLocked(): boolean {
+  return !!current.app.settingsPasswordHash;
 }
 
 /* ---------- setup wizard ---------- */
@@ -179,7 +193,8 @@ function toSetupDevice(d: DeviceConfig): SetupDevice {
 export function toSetupState(): SetupState {
   return {
     configured: isConfigured(),
-    app: { ...current.app },
+    app: { name: current.app.name, httpPort: current.app.httpPort, bind: current.app.bind },
+    settingsLocked: isSettingsLocked(),
     devices: current.devices.map(toSetupDevice),
     defaultPorts: DEFAULT_PORTS,
   };
@@ -246,11 +261,16 @@ export function applySetup(body: SetupSaveBody): AppConfig {
     if (seenIds.has(id)) throw new Error(`duplicate device id "${id}"`);
     seenIds.add(id);
   }
+  const port = Number(body.app?.httpPort ?? current.app.httpPort) || 8080;
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`port must be 1-65535 (got ${body.app?.httpPort})`);
   const next: AppConfig = {
     app: {
       name: (body.app?.name ?? current.app.name) || BRAND.name,
-      httpPort: Number(body.app?.httpPort ?? current.app.httpPort) || 8080,
+      httpPort: port,
       bind: body.app?.bind ?? current.app.bind ?? "0.0.0.0",
+      // the wizard doesn't manage the settings password — carry it through untouched
+      settingsPasswordHash: current.app.settingsPasswordHash,
+      settingsPasswordSalt: current.app.settingsPasswordSalt,
     },
     devices: body.devices.map(fromSetupDevice),
     presets: current.presets,
