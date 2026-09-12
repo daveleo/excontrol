@@ -1,6 +1,6 @@
 {
   "name": "@excontrol/desktop",
-  "version": "0.2.0",
+  "version": "0.2.5",
   "private": true,
   "description": "eXcontrol desktop app (Electron)",
   "author": "Expromo",
