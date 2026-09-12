@@ -119,7 +119,9 @@ The control panel's **port** is configurable from the same App settings section;
 it reconnects every open browser to the new port automatically.
 
 See [`docs/NETWORK.md`](docs/NETWORK.md) for the full inbound-port + outbound-traffic
-breakdown IT/AV teams typically ask for before deployment.
+breakdown IT/AV teams typically ask for before deployment, and
+[`docs/SECURITY.md`](docs/SECURITY.md) for the honest security posture — what's protected,
+what isn't, and how that compares to other AV control software.
 
 ## License
 

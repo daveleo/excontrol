@@ -2,7 +2,9 @@
 
 For IT/AV teams who need to know exactly what eXcontrol opens and talks to before it goes
 on a venue network. See also the [network model note in the README](../README.md#network--security-model)
-for the reasoning behind the "trusted LAN, no TLS" design.
+for the reasoning behind the "trusted LAN, no TLS" design, and
+[`SECURITY.md`](SECURITY.md) for the broader security posture and how it compares to other
+AV control software.
 
 ## Inbound
 

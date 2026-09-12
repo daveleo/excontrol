@@ -180,6 +180,11 @@ typecheck/tests, both are now fixed):
 - **`docs/NETWORK.md`** — the inbound port (the control panel itself, configurable) and
   every outbound connection (each configured device's protocol/port, plus the optional
   HTTPS GitHub update check) documented for customers' IT/AV network reviews.
+- **`docs/SECURITY.md`** — the honest security posture for IT/security teams: auth model
+  and its real limits (shared password, no RBAC, no per-user audit trail), no-TLS rationale,
+  plaintext-secrets-at-rest caveat, unsigned-binary caveat, and a comparison table against
+  Bitfocus Companion / typical Crestron-Extron installs / enterprise-tier platforms —
+  written to answer "how secure is this" without either overselling or underselling it.
 - Test suite 101 → 112 (EPS driver: zone construction, `OUTPUTS`-bit parsing, `setOn`
   dispatch, unconfigured-output rejection; config validation: duplicate output id/index,
   out-of-range index; registry: a disabled device seeds no dashboard card).
