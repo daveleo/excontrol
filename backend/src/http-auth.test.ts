@@ -70,6 +70,8 @@ describe("settings lock — set, login, gated routes", () => {
       { method: "POST", url: "/api/devices/x/zones/-/preset", ...json({ presetId: 1 }) },
       { method: "POST", url: "/api/devices/x/zones/-/blackout", ...json({ blackout: true }) },
       { method: "POST", url: "/api/devices/x/action/power_on" },
+      { method: "POST", url: "/api/app-settings", ...json({ name: "x" }) },
+      { method: "POST", url: "/api/updates/check" },
     ];
     for (const req of reqs) {
       expect((await app.inject(req)).statusCode, req.url).toBe(401);
@@ -143,6 +145,35 @@ describe("configurable port", () => {
   it("does not report portChanged when only devices change", async () => {
     const r = await app.inject({ method: "POST", url: "/api/setup/save", ...json({ devices: [] }) });
     expect(r.json()).toMatchObject({ portChanged: false });
+  });
+});
+
+describe("app settings — name/port/autostart, separate from the device wizard", () => {
+  it("updates name and autoStart without touching devices", async () => {
+    await app.inject({ method: "POST", url: "/api/setup/save", ...json({ devices: [{ id: "eps", type: "expromo-eps", label: "P", enabled: true, host: "1.1.1.1", port: 5000 }] }) });
+    const r = await app.inject({ method: "POST", url: "/api/app-settings", ...json({ name: "Studio A", autoStart: false }) });
+    expect(r.json()).toMatchObject({ ok: true, portChanged: false });
+    const state = (await app.inject({ method: "GET", url: "/api/setup/state" })).json();
+    expect(state.app.name).toBe("Studio A");
+    expect(state.app.autoStart).toBe(false);
+    expect(state.devices).toHaveLength(1);
+  });
+
+  it("reports portChanged when the port differs", async () => {
+    const r = await app.inject({ method: "POST", url: "/api/app-settings", ...json({ httpPort: 9292 }) });
+    expect(r.json()).toMatchObject({ ok: true, portChanged: true, port: 9292 });
+  });
+
+  it("defaults autoStart to true", async () => {
+    const state = (await app.inject({ method: "GET", url: "/api/setup/state" })).json();
+    expect(state.app.autoStart).toBe(true);
+  });
+});
+
+describe("check for updates", () => {
+  it("reports triggered:false when no updater is registered (source/CLI runtime)", async () => {
+    const r = await app.inject({ method: "POST", url: "/api/updates/check" });
+    expect(r.json()).toEqual({ ok: true, triggered: false });
   });
 });
 

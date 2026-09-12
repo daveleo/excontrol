@@ -9,6 +9,13 @@ import { registerHttpRestarter } from "./core/httpControl.js";
 import { BRAND } from "@excontrol/shared";
 import type { FastifyInstance } from "fastify";
 
+// Re-exported so the Electron main process can wire itself into the Settings panel's
+// "start when Windows starts" toggle and "check for updates now" button, without either
+// side needing to know the other's internals.
+export { getConfig } from "./config.js";
+export { registerAutoStartHandler } from "./core/autoStartControl.js";
+export { registerUpdateChecker } from "./core/updateControl.js";
+
 export interface RunningServer {
   readonly url: string;
   readonly port: number;

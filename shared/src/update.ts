@@ -23,3 +23,11 @@ export interface UpdateStatusBody {
   notes?: string;
   error?: string;
 }
+
+/** Response to a manual "check for updates" request from Settings. `triggered` is false
+ *  when there's no Electron updater in this runtime (running from source / the CLI) —
+ *  the result of the check itself still arrives later via the usual `updateInfo` broadcast. */
+export interface UpdateCheckResponse {
+  ok: boolean;
+  triggered: boolean;
+}

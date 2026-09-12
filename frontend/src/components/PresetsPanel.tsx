@@ -75,6 +75,15 @@ export function PresetsPanel({ state, onClose }: { state: AppState; onClose: () 
     if (!(await ensureUnlocked(state.app.settingsLocked, verifyToken))) return;
     await act(() => deletePreset(id), id)();
   };
+  const toggleDefault = async (p: AppPreset) => {
+    if (!(await ensureUnlocked(state.app.settingsLocked, verifyToken))) return;
+    await act(
+      () => savePreset({ id: p.id, label: p.label, actions: p.actions, powerOnDefaultFor: p.powerOnDefaultFor ? null : "all" }),
+      p.id,
+    )();
+  };
+  const defaultLabel = (target: string) =>
+    target === "all" ? "all power units" : state.devices.find((d) => d.id === target)?.label ?? target;
 
   if (editing) {
     return (
@@ -103,12 +112,20 @@ export function PresetsPanel({ state, onClose }: { state: AppState; onClose: () 
             <b>{p.label}</b>
             <span className="pr-meta">
               {p.actions.length} action{p.actions.length === 1 ? "" : "s"}
-              {p.powerOnDefaultFor ? " · ⭐ default on startup" : ""}
+              {p.powerOnDefaultFor ? ` · ⭐ default for ${defaultLabel(p.powerOnDefaultFor)}` : ""}
             </span>
           </div>
           <div className="row">
             <button className="primary" disabled={busy === p.id} onClick={act(() => applyPreset(p.id), p.id)}>
               Apply
+            </button>
+            <button
+              className={`star-toggle ${p.powerOnDefaultFor ? "on" : ""}`}
+              disabled={busy === p.id}
+              onClick={() => void toggleDefault(p)}
+              title={p.powerOnDefaultFor ? "Default on startup — tap to unmark" : "Mark as default on startup"}
+            >
+              {p.powerOnDefaultFor ? "⭐" : "☆"} Default on startup
             </button>
             <button disabled={busy === p.id} onClick={() => void edit(p)}>Edit</button>
             <button disabled={busy === p.id} onClick={() => void remove(p.id)}>Delete</button>

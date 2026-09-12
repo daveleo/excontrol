@@ -18,7 +18,7 @@ would add real complexity most single-room installs don't need.
 
 ## Authentication
 
-- **One shared "access password"**, optional, set from Devices → App settings. Once set, it
+- **One shared "access password"**, optional, set from Settings. Once set, it
   gates the *entire* control surface — every REST route and the live `/ws` feed — not just
   device configuration. Nobody without the password sees anything but a login prompt, not
   even read-only status.
@@ -66,8 +66,8 @@ would add real complexity most single-room installs don't need.
 - The access password is the exception: it's a salted hash, never plaintext, in the same
   file.
 - The config (with credentials) only ever leaves the machine via an explicit **Export
-  config** (Devices → App settings → Backup) that the operator triggers and downloads
-  themselves — nothing pushes it anywhere automatically.
+  config** (Settings → Backup) that the operator triggers and downloads themselves —
+  nothing pushes it anywhere automatically.
 - Logs (`%ProgramData%\eXcontrol\logs\`) are checked to exclude both the access password and
   device secrets.
 
@@ -76,7 +76,7 @@ would add real complexity most single-room installs don't need.
 - The control panel **binds to `0.0.0.0` by default** — every network interface on that
   machine, not just the AV VLAN's. If the control PC has a second NIC on a different
   network (a guest Wi-Fi dongle, a corporate LAN port), the panel is reachable there too
-  unless `bind` is deliberately set to the AV VLAN's own address in App settings.
+  unless `bind` is deliberately set to the AV VLAN's own address in Settings.
 - The Windows installer opens one inbound firewall rule scoped to the `eXcontrol.exe`
   program (not a specific port) so the app is reachable from the LAN; uninstalling removes
   it.

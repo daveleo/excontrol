@@ -1,10 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { DeviceType, SetupDevice, SetupState, SetupZone, SetupEpsOutput, ProbeResult, ScanHit } from "@excontrol/shared";
-import {
-  getSetupState, probeDevice, scanNetwork, saveSetup, setSettingsPassword, login, verifyToken,
-  exportConfig, importConfig, downloadDiagnostics,
-} from "../api.js";
-import { ensureUnlocked } from "../lib/unlock.js";
+import { getSetupState, probeDevice, scanNetwork, saveSetup } from "../api.js";
 
 const TYPE_LABEL: Record<DeviceType, string> = {
   "novastar-h": "NovaStar H-series",
@@ -32,8 +28,6 @@ export function SetupWizard({
   /** ids of EPS devices currently powered off — a failed Test on their equipment is expected */
   epsOff?: Set<string>;
 }) {
-  const [app, setApp] = useState(initial.app);
-  const [locked, setLocked] = useState(initial.settingsLocked);
   const [devices, setDevices] = useState<SetupDevice[]>(initial.devices);
   const [probes, setProbes] = useState<ProbeCache>({});
   const [saving, setSaving] = useState(false);
@@ -121,8 +115,8 @@ export function SetupWizard({
   };
 
   const dirty = useMemo(
-    () => JSON.stringify(devices) !== JSON.stringify(initial.devices) || JSON.stringify(app) !== JSON.stringify(initial.app),
-    [devices, app, initial],
+    () => JSON.stringify(devices) !== JSON.stringify(initial.devices),
+    [devices, initial],
   );
   const close = () => {
     if (dirty && !confirm("Discard your changes to the device setup?")) return;
@@ -137,7 +131,7 @@ export function SetupWizard({
     setSaving(true);
     setSaveErr(null);
     try {
-      const res = await saveSetup({ app, devices });
+      const res = await saveSetup({ devices });
       if (res.portChanged) {
         setReconnecting(res.port);
         followToPort(res.port);
@@ -183,7 +177,7 @@ export function SetupWizard({
       <div className="wiz-inner">
         <header className="wiz-head">
           <div>
-            <h1>{initial.configured ? "Devices" : `Welcome to ${app.name}`}</h1>
+            <h1>{initial.configured ? "Devices" : `Welcome to ${initial.app.name}`}</h1>
             <p>
               {initial.configured
                 ? "Add, edit or remove the devices this controller talks to."
@@ -194,13 +188,6 @@ export function SetupWizard({
             <button className="wiz-x" onClick={close} aria-label="Close">✕</button>
           )}
         </header>
-
-        <AppSettingsSection
-          app={app}
-          onChange={(patch) => setApp((a) => ({ ...a, ...patch }))}
-          locked={locked}
-          onLockedChange={setLocked}
-        />
 
         <section className="wiz-scan">
           <button className="primary" disabled={scan.running} onClick={runScan}>
@@ -259,193 +246,6 @@ export function SetupWizard({
           </button>
         </div>
       </footer>
-    </div>
-  );
-}
-
-function AppSettingsSection({
-  app, onChange, locked, onLockedChange,
-}: {
-  app: SetupState["app"];
-  onChange: (patch: Partial<SetupState["app"]>) => void;
-  locked: boolean;
-  onLockedChange: (locked: boolean) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <section className="wiz-app-settings">
-      <button className="linkish wiz-app-toggle" onClick={() => setOpen((v) => !v)}>
-        {open ? "▾" : "▸"} App settings — name, port, access password
-      </button>
-      {open && (
-        <div className="wiz-app-grid">
-          <label className="field">
-            <span>Display name</span>
-            <input value={app.name} onChange={(e) => onChange({ name: e.target.value })} />
-          </label>
-          <label className="field narrow">
-            <span>Port</span>
-            <input
-              type="number" value={app.httpPort}
-              onChange={(e) => onChange({ httpPort: Number(e.target.value) || app.httpPort })}
-            />
-          </label>
-          <p className="muted small wiz-app-note">
-            The control panel's address on this network, e.g. <code>http://&lt;this-PC&apos;s-IP&gt;:{app.httpPort}</code>.
-            Changing the port reconnects everyone automatically.
-          </p>
-          <SecurityPassword locked={locked} onLockedChange={onLockedChange} />
-          <BackupSection locked={locked} />
-        </div>
-      )}
-    </section>
-  );
-}
-
-function SecurityPassword({ locked, onLockedChange }: { locked: boolean; onLockedChange: (locked: boolean) => void }) {
-  const [mode, setMode] = useState<null | "set" | "change" | "remove">(null);
-  const [current, setCurrent] = useState("");
-  const [next, setNext] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-
-  const reset = () => { setMode(null); setCurrent(""); setNext(""); setConfirm(""); };
-
-  const submit = async () => {
-    if (mode === "remove") {
-      if (!current) return setMsg({ ok: false, text: "Enter the current password to remove it." });
-    } else if (!next || next !== confirm) {
-      return setMsg({ ok: false, text: "New passwords must match and can't be empty." });
-    }
-    setBusy(true);
-    setMsg(null);
-    try {
-      await setSettingsPassword({
-        currentPassword: locked ? current : undefined,
-        newPassword: mode === "remove" ? null : next,
-      });
-      if (mode === "remove") {
-        onLockedChange(false);
-      } else {
-        await login(next); // stay authenticated in this session under the new password
-        onLockedChange(true);
-      }
-      setMsg({ ok: true, text: mode === "remove" ? "Password removed." : "Password saved." });
-      reset();
-    } catch (e) {
-      setMsg({ ok: false, text: e instanceof Error ? e.message : String(e) });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="wiz-security">
-      <div className="wd-zones-head">
-        <span>Access password</span>
-        <span className="muted small">
-          {locked ? "Set — the whole control panel requires it, on every device." : "Not set — anyone on the network can open and operate this control panel."}
-        </span>
-      </div>
-
-      {!mode && (
-        <div className="row">
-          {!locked && <button onClick={() => setMode("set")}>Set a password</button>}
-          {locked && <button onClick={() => setMode("change")}>Change password</button>}
-          {locked && <button onClick={() => setMode("remove")}>Remove password</button>}
-        </div>
-      )}
-
-      {mode && (
-        <div className="wiz-security-form">
-          {locked && (
-            <input type="password" placeholder="Current password" value={current} onChange={(e) => setCurrent(e.target.value)} />
-          )}
-          {mode !== "remove" && (
-            <>
-              <input type="password" placeholder="New password" value={next} onChange={(e) => setNext(e.target.value)} />
-              <input type="password" placeholder="Confirm new password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
-            </>
-          )}
-          <div className="row">
-            <button onClick={reset} disabled={busy}>Cancel</button>
-            <button className="primary" onClick={submit} disabled={busy}>
-              {busy ? "Saving…" : mode === "remove" ? "Remove" : "Save password"}
-            </button>
-          </div>
-        </div>
-      )}
-      {msg && <span className={msg.ok ? "probe-ok" : "probe-bad"}>{msg.text}</span>}
-      <p className="hint muted">
-        Locks the entire control panel — viewing state, brightness, blackout, power, presets, the
-        schedule, everything — not just this Devices screen. Anyone without the password sees a
-        login prompt and nothing else.
-      </p>
-    </div>
-  );
-}
-
-function BackupSection({ locked }: { locked: boolean }) {
-  const [busy, setBusy] = useState<string | null>(null);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  const run = (key: string, fn: () => Promise<void>) => async () => {
-    if (!(await ensureUnlocked(locked, verifyToken))) return;
-    setBusy(key);
-    setMsg(null);
-    try {
-      await fn();
-      if (key !== "import") setMsg({ ok: true, text: "Downloaded." });
-    } catch (e) {
-      setMsg({ ok: false, text: e instanceof Error ? e.message : String(e) });
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const onImportFile = run("import", async () => {
-    const file = fileRef.current?.files?.[0];
-    if (!file) return;
-    const parsed: unknown = JSON.parse(await file.text());
-    const res = await importConfig(parsed);
-    if (res.portChanged) {
-      setMsg({ ok: true, text: `Imported — reconnecting on port ${res.port}…` });
-      setTimeout(() => (location.href = `${location.protocol}//${location.hostname}:${res.port}/`), 1200);
-    } else {
-      setMsg({ ok: true, text: "Imported — reloading…" });
-      setTimeout(() => location.reload(), 1000);
-    }
-  });
-
-  return (
-    <div className="wiz-security">
-      <div className="wd-zones-head">
-        <span>Backup</span>
-        <span className="muted small">Move this setup to a new PC, or send diagnostics for support.</span>
-      </div>
-      <div className="row">
-        <button onClick={run("export", exportConfig)} disabled={!!busy}>
-          {busy === "export" ? "Exporting…" : "Export config"}
-        </button>
-        <button onClick={() => fileRef.current?.click()} disabled={!!busy}>
-          {busy === "import" ? "Importing…" : "Import config file"}
-        </button>
-        <button onClick={run("diag", downloadDiagnostics)} disabled={!!busy}>
-          {busy === "diag" ? "Preparing…" : "Download diagnostics"}
-        </button>
-      </div>
-      <input
-        ref={fileRef} type="file" accept="application/json" hidden
-        onChange={(e) => { if (e.target.files?.[0]) void onImportFile(); e.target.value = ""; }}
-      />
-      {msg && <span className={msg.ok ? "probe-ok" : "probe-bad"}>{msg.text}</span>}
-      <p className="hint muted">
-        The exported file has device credentials in plain text — keep it somewhere private. Importing
-        replaces every device, preset and schedule entry here (this install's access password is kept).
-        Diagnostics redacts secrets and is safe to share with support.
-      </p>
     </div>
   );
 }

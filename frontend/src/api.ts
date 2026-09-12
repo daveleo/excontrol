@@ -1,6 +1,7 @@
 import type {
   AppPreset, ScheduleEntry, SetupState, SetupDevice, SetupSaveBody, SetupSaveResponse,
-  ProbeResult, ScanHit, AuthStatus, SetPasswordBody,
+  ProbeResult, ScanHit, AuthStatus, SetPasswordBody, AppSettingsBody, AppSettingsResponse,
+  UpdateCheckResponse,
 } from "@excontrol/shared";
 import { getToken, setToken, clearToken } from "./lib/auth.js";
 
@@ -38,6 +39,10 @@ export const probeDevice = (d: SetupDevice) => post("/api/setup/probe", d) as Pr
 export const scanNetwork = () =>
   send("GET", "/api/setup/scan") as Promise<{ subnets: string[]; hits: ScanHit[] }>;
 export const saveSetup = (body: SetupSaveBody) => post("/api/setup/save", body) as Promise<SetupSaveResponse>;
+
+/* ---- settings panel (name / port / autostart / check for updates) ---- */
+export const saveAppSettings = (body: AppSettingsBody) => post("/api/app-settings", body) as Promise<AppSettingsResponse>;
+export const checkForUpdates = () => post("/api/updates/check", {}) as Promise<UpdateCheckResponse>;
 
 /* ---- settings lock ---- */
 export const authStatus = () => send("GET", "/api/auth/status") as Promise<AuthStatus>;

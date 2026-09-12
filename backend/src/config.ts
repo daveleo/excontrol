@@ -1,7 +1,9 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
-import type { DeviceType, AppPreset, Schedule, SetupDevice, SetupState, SetupSaveBody } from "@excontrol/shared";
+import type {
+  DeviceType, AppPreset, Schedule, SetupDevice, SetupState, SetupSaveBody, AppSettingsBody,
+} from "@excontrol/shared";
 import { BRAND, SECRET_KEPT } from "@excontrol/shared";
 import { log } from "./logger.js";
 
@@ -86,6 +88,9 @@ export interface AppConfig {
     /** scrypt hash + salt of the settings password, hex. Absent = settings unlocked. */
     settingsPasswordHash?: string;
     settingsPasswordSalt?: string;
+    /** launch at Windows login (desktop only — ignored from source/CLI). Default true to
+     *  match every install's behaviour before this was a toggle. */
+    autoStart: boolean;
   };
   devices: DeviceConfig[];
   presets: AppPreset[];
@@ -93,7 +98,7 @@ export interface AppConfig {
 }
 
 const EMPTY_CONFIG: AppConfig = {
-  app: { name: BRAND.name, httpPort: 8080, bind: "0.0.0.0" },
+  app: { name: BRAND.name, httpPort: 8080, bind: "0.0.0.0", autoStart: true },
   devices: [],
   presets: [],
   schedule: { entries: [] },
@@ -157,6 +162,7 @@ function normalise(p: Partial<AppConfig>): AppConfig {
       bind: p.app?.bind || "0.0.0.0",
       settingsPasswordHash: p.app?.settingsPasswordHash,
       settingsPasswordSalt: p.app?.settingsPasswordSalt,
+      autoStart: p.app?.autoStart !== false,
     },
     devices: Array.isArray(p.devices) ? (p.devices as DeviceConfig[]) : [],
     presets: Array.isArray(p.presets) ? p.presets : [],
@@ -207,7 +213,10 @@ function toSetupDevice(d: DeviceConfig): SetupDevice {
 export function toSetupState(): SetupState {
   return {
     configured: isConfigured(),
-    app: { name: current.app.name, httpPort: current.app.httpPort, bind: current.app.bind },
+    app: {
+      name: current.app.name, httpPort: current.app.httpPort, bind: current.app.bind,
+      autoStart: current.app.autoStart,
+    },
     settingsLocked: isSettingsLocked(),
     devices: current.devices.map(toSetupDevice),
     defaultPorts: DEFAULT_PORTS,
@@ -295,15 +304,34 @@ export function applySetup(body: SetupSaveBody): AppConfig {
       name: (body.app?.name ?? current.app.name) || BRAND.name,
       httpPort: Number(body.app?.httpPort ?? current.app.httpPort) || 8080,
       bind: body.app?.bind ?? current.app.bind ?? "0.0.0.0",
-      // the wizard doesn't manage the settings password — carry it through untouched
+      // the device wizard doesn't manage the settings password or autostart — carry both
+      // through untouched (Settings owns those).
       settingsPasswordHash: current.app.settingsPasswordHash,
       settingsPasswordSalt: current.app.settingsPasswordSalt,
+      autoStart: current.app.autoStart,
     },
     devices: body.devices.map(fromSetupDevice),
     presets: current.presets,
     schedule: current.schedule,
   };
   return saveConfig(next); // saveConfig runs validate(), incl. the port range check
+}
+
+/** Validate + persist a Settings-panel submission (name/port/bind/autostart). Devices,
+ *  presets, schedule and the access password are all left untouched — that's the device
+ *  wizard's and the password endpoints' job, not this one's. */
+export function applyAppSettings(body: AppSettingsBody): AppConfig {
+  const next: AppConfig = {
+    ...current,
+    app: {
+      ...current.app,
+      name: (body.name ?? current.app.name) || BRAND.name,
+      httpPort: Number(body.httpPort ?? current.app.httpPort) || 8080,
+      bind: body.bind ?? current.app.bind ?? "0.0.0.0",
+      autoStart: body.autoStart ?? current.app.autoStart,
+    },
+  };
+  return saveConfig(next);
 }
 
 /** Full config for export/pre-staging — device secrets included (that's the point), the

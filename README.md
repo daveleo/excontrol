@@ -35,18 +35,22 @@ Supports **NovaStar H-series** and **COEX** processors, **Expromo EPS** power un
 - **Dark / bright mode** — a switch top-right of the control panel; follows the OS theme
   until the operator picks one, then remembers it per-browser.
 - **Access password (optional)** — lock the *entire* control panel behind a shared
-  password from the Devices screen: viewing state, brightness, blackout, power, presets,
-  the schedule, settings, all of it. Nobody without the password sees anything but a login
-  screen.
+  password from Settings: viewing state, brightness, blackout, power, presets, the
+  schedule, everything. Nobody without the password sees anything but a login screen.
+- **Settings** (gear icon, top bar) — display name, port, the access password, autostart,
+  updates and backup, all in one place, separate from **Devices** (which is purely device
+  configuration).
+- **Starts with Windows (optional)** — toggle "Start when Windows starts" in Settings; on
+  by default, applies immediately without restarting the app.
 - **Integrates with Bitfocus Companion today** via its Generic HTTP module — see
   [`docs/COMPANION.md`](docs/COMPANION.md).
-- **Updates itself** — checks public GitHub Releases on launch and on demand (tray →
-  Check for updates); *Install now / Skip this version / Remind me later*, never a silent
+- **Updates itself** — checks public GitHub Releases on launch, on demand from **Settings**,
+  or from the tray; *Install now / Skip this version / Remind me later*, never a silent
   auto-install. Every open browser sees a small banner when one's waiting, even though
   only the control PC can run the installer.
-- **Backup & diagnostics** (Devices → App settings → Backup) — export the whole config
-  (including device credentials, to pre-stage a new PC) or import one back; download a
-  redacted diagnostics zip (config + live state + recent logs) to send to support.
+- **Backup & diagnostics** (Settings → Backup) — export the whole config (including device
+  credentials, to pre-stage a new PC) or import one back; download a redacted diagnostics
+  zip (config + live state + recent logs) to send to support.
 
 ## Run from source
 
@@ -105,7 +109,7 @@ be reachable from outside that trusted network, put it behind a VPN/Tailscale ra
 exposing it directly.
 
 What *is* worth locking down on a shared LAN: who gets to touch the room at all. Setting
-an **access password** (Devices → App settings → Access password) gates the whole
+an **access password** (Settings → Access password) gates the whole
 control panel — the REST API and the live WebSocket feed both require it, so an
 unauthenticated browser gets a login screen and nothing else, not even read-only state.
 It's one shared password, not per-user accounts; a login is a bearer token good for 30
@@ -115,7 +119,7 @@ plaintext. **If it's forgotten**, stop the app and delete the `settingsPasswordH
 `settingsPasswordSalt` keys from `excontrol.config.json` — that removes the lock, same as
 any other local device's "physical access resets it" recovery.
 
-The control panel's **port** is configurable from the same App settings section; changing
+The control panel's **port** is configurable from the same Settings panel; changing
 it reconnects every open browser to the new port automatically.
 
 See [`docs/NETWORK.md`](docs/NETWORK.md) for the full inbound-port + outbound-traffic

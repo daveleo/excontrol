@@ -8,6 +8,7 @@ import { zipSync, strToU8 } from "fflate";
 import type {
   SetBrightnessBody, RecallPresetBody, SetBlackoutBody, SetOnBody, AppPreset, ScheduleEntry,
   SetupDevice, SetupSaveBody, SetupSaveResponse, LoginBody, SetPasswordBody, UpdateStatusBody,
+  AppSettingsBody, AppSettingsResponse, UpdateCheckResponse,
 } from "@excontrol/shared";
 import { BRAND } from "@excontrol/shared";
 import { store } from "../core/state.js";
@@ -17,7 +18,8 @@ import { getPresets, savePreset, deletePreset, applyPreset } from "../core/prese
 import { getSchedule, setEntries, snooze } from "../core/schedule.js";
 import { powerDomain } from "../core/power.js";
 import {
-  toSetupState, applySetup, getConfig, isSettingsLocked, exportConfig, importConfig, getDataDir,
+  toSetupState, applySetup, applyAppSettings, getConfig, isSettingsLocked, exportConfig,
+  importConfig, getDataDir,
 } from "../config.js";
 import { probeDevice } from "../setup/probe.js";
 import { scanSubnets, localSubnets } from "../setup/scan.js";
@@ -26,6 +28,8 @@ import {
   loginGate, recordLoginFailure, recordLoginSuccess,
 } from "../core/auth.js";
 import { restartHttpServer } from "../core/httpControl.js";
+import { notifyAutoStartChanged } from "../core/autoStartControl.js";
+import { requestUpdateCheck } from "../core/updateControl.js";
 import { log } from "../logger.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -235,6 +239,38 @@ export async function buildHttp() {
       }, 300);
       return;
     }
+    return res;
+  });
+
+  /* ---- app settings (name / port / autostart — separate from the device wizard above) ---- */
+
+  app.post<{ Body: AppSettingsBody }>("/api/app-settings", { preHandler: requireAuth }, async (req, reply) => {
+    const prevPort = getConfig().app.httpPort;
+    const prevBind = getConfig().app.bind;
+    const prevAutoStart = getConfig().app.autoStart;
+    let cfg;
+    try {
+      cfg = applyAppSettings(req.body ?? {});
+    } catch (e) {
+      return fail(reply, 400, e);
+    }
+    if (cfg.app.autoStart !== prevAutoStart) notifyAutoStartChanged(cfg.app.autoStart);
+    const portChanged = cfg.app.httpPort !== prevPort || cfg.app.bind !== prevBind;
+    bus.emit("broadcast", { t: "toast", level: "info", text: "Settings saved" });
+    const res: AppSettingsResponse = { ok: true, portChanged, port: cfg.app.httpPort };
+    if (portChanged) {
+      reply.send(res);
+      setTimeout(() => {
+        restartHttpServer().catch((e) => log.error({ err: e }, "http restart after app-settings change failed"));
+      }, 300);
+      return;
+    }
+    return res;
+  });
+
+  app.post("/api/updates/check", { preHandler: requireAuth }, async () => {
+    const triggered = requestUpdateCheck(true);
+    const res: UpdateCheckResponse = { ok: true, triggered };
     return res;
   });
 

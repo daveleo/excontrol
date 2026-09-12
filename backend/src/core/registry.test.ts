@@ -8,7 +8,7 @@ afterEach(async () => {
 });
 
 const cfg = (): AppConfig => ({
-  app: { name: "Test", httpPort: 8080, bind: "0.0.0.0" },
+  app: { name: "Test", httpPort: 8080, bind: "0.0.0.0", autoStart: true },
   devices: [
     { id: "eps-on", type: "expromo-eps", label: "Enabled EPS", enabled: true, host: "127.0.0.1", port: 1 },
     { id: "eps-off", type: "expromo-eps", label: "Disabled EPS", enabled: false, host: "127.0.0.1", port: 1 },

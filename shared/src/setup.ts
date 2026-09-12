@@ -49,7 +49,7 @@ export interface SetupDevice {
 
 export interface SetupState {
   configured: boolean;
-  app: { name: string; httpPort: number; bind: string };
+  app: { name: string; httpPort: number; bind: string; autoStart: boolean };
   /** true → this endpoint itself required a password to reach; shown so the wizard can
    *  offer "change" instead of "set" for the settings password. */
   settingsLocked: boolean;
@@ -66,6 +66,23 @@ export interface SetupSaveBody {
 export interface SetupSaveResponse {
   ok: boolean;
   configured: boolean;
+  /** the HTTP port changed — the server rebinds itself and the client must follow it */
+  portChanged: boolean;
+  port: number;
+}
+
+/** The Settings panel (name / port / autostart) — separate from the device editor above. */
+export interface AppSettingsBody {
+  name?: string;
+  httpPort?: number;
+  bind?: string;
+  /** launch eXcontrol automatically when Windows starts (this user account). Desktop-only —
+   *  ignored when running from source / the CLI. */
+  autoStart?: boolean;
+}
+
+export interface AppSettingsResponse {
+  ok: boolean;
   /** the HTTP port changed — the server rebinds itself and the client must follow it */
   portChanged: boolean;
   port: number;

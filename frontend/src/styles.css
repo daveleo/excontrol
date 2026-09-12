@@ -90,7 +90,7 @@ input, select, button { font: inherit; color: inherit; }
 .brand .dot[data-on="true"] { background: var(--ok); }
 .toolbar { display: flex; align-items: center; gap: 8px; }
 .build { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-.text-btn, .icon-btn {
+.text-btn, .icon-btn, .icon-text-btn {
   background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
   border-radius: 8px; cursor: pointer;
 }
@@ -99,12 +99,16 @@ input, select, button { font: inherit; color: inherit; }
   position: relative; width: 34px; height: 34px;
   display: inline-flex; align-items: center; justify-content: center;
 }
-.text-btn:hover:not(:disabled), .icon-btn:hover { border-color: var(--accent); }
-.text-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.icon-btn .badge {
-  position: absolute; top: -5px; right: -5px; min-width: 16px; height: 16px; padding: 0 3px;
+.icon-text-btn {
+  display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; font-size: 13px; font-weight: 600;
+}
+.text-btn:hover:not(:disabled), .icon-btn:hover, .icon-text-btn:hover:not(:disabled) { border-color: var(--accent); }
+.text-btn:disabled, .icon-text-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.icon-btn .badge, .icon-text-btn .badge {
+  min-width: 16px; height: 16px; padding: 0 3px;
   border-radius: 8px; background: var(--accent); color: #fff; font-size: 10px; line-height: 16px; text-align: center;
 }
+.icon-btn .badge { position: absolute; top: -5px; right: -5px; }
 
 .setup-needed {
   background: var(--panel); border: 1px solid var(--accent); border-radius: 12px;
@@ -282,6 +286,7 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-si
   padding: 7px 12px; border-radius: 7px; cursor: pointer; font-size: 13px;
 }
 .preset-row .row button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.preset-row .row button.star-toggle.on { border-color: #f5b301; color: #f5b301; }
 .pe-row { border: 1px solid var(--line); border-radius: 9px; padding: 10px 12px; }
 .pe-row.on { border-color: var(--accent); }
 .pe-controls { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; font-size: 13px; }
@@ -366,16 +371,12 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-si
 
 .linkish { background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; font-size: 13px; }
 
-.wiz-app-settings {
-  background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px;
-}
-.wiz-app-toggle { font-weight: 600; }
-.wiz-app-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 12px; align-items: end; }
+.wiz-app-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; align-items: end; }
 .wiz-app-grid .field.narrow { max-width: 110px; }
 .wiz-app-note { grid-column: 1 / -1; margin: 0; }
 .wiz-app-note code { font-size: 0.95em; }
 
-.wiz-security { grid-column: 1 / -1; border-top: 1px dashed var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.wiz-security { border-top: 1px dashed var(--line); margin-top: 14px; padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
 .wiz-security .row { display: flex; gap: 8px; flex-wrap: wrap; }
 .wiz-security-form { display: flex; flex-direction: column; gap: 8px; max-width: 280px; }
 .wiz-security-form input { width: 100%; box-sizing: border-box; }

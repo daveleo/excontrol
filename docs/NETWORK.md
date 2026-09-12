@@ -12,7 +12,7 @@ AV control software.
 |---|---|---|
 | **8080** (configurable) | HTTP (plain, no TLS) | The control panel itself — the web UI, the REST API, and the live `/ws` WebSocket feed. Every phone/tablet/PC that operates the room connects here. |
 
-- The port is set in **Devices → App settings** and takes effect immediately (every open
+- The port is set in **Settings** and takes effect immediately (every open
   browser follows automatically); it is **not** fixed at 8080.
 - The Windows installer adds one inbound firewall rule scoped to the `eXcontrol.exe`
   program (all profiles) — not just this one port — so the app can be reached from the LAN.
@@ -53,7 +53,7 @@ anywhere else — no analytics, no telemetry, no third-party trackers.
   plain text in the config file (`%ProgramData%\eXcontrol\excontrol.config.json`) — same
   trust model as the network above: anyone with filesystem access to the control PC has
   them. This file is never transmitted anywhere except via an explicit **Export config**
-  (Devices → App settings → Backup), which the operator triggers and downloads themselves.
+  (Settings → Backup), which the operator triggers and downloads themselves.
 - The access password (if set) is stored as a salted scrypt hash, never in plaintext.
 - Logs (`%ProgramData%\eXcontrol\logs\`) do not include device secrets or the access
   password.

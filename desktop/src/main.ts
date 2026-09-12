@@ -2,7 +2,9 @@ import { app, BrowserWindow, Tray, Menu, shell, nativeImage, clipboard, dialog }
 import { join } from "node:path";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { networkInterfaces } from "node:os";
-import { startServer, type RunningServer } from "@excontrol/backend";
+import {
+  startServer, getConfig, registerAutoStartHandler, registerUpdateChecker, type RunningServer,
+} from "@excontrol/backend";
 import { BRAND } from "@excontrol/shared";
 import { initUpdater, type Updater } from "./updater.js";
 
@@ -49,6 +51,14 @@ function trayIcon(): Electron.NativeImage {
     "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAt0lEQVR4nGNgGAWjYBSMglEwCkbBKBgFo2AU" +
     "jIJRMApGwSgYBaNgFIyCUTAKRsEoGAWjYBSMglEwCkYBKQAAmvUB8Yc5kR0AAAAASUVORK5CYII=";
   return nativeImage.createFromBuffer(Buffer.from(png, "base64"));
+}
+
+function applyAutoStart(enabled: boolean): void {
+  try {
+    app.setLoginItemSettings({ openAtLogin: enabled, path: process.execPath });
+  } catch (e) {
+    console.log("[autostart] failed to set login item:", e);
+  }
 }
 
 function localIp(): string {
@@ -125,6 +135,13 @@ async function main(): Promise<void> {
   }
 
   updater = initUpdater(() => server, dataDir);
+  registerUpdateChecker((manual) => updater?.checkForUpdates(manual));
+
+  // "Start when Windows starts" is a Settings toggle backed by Electron's own per-user login
+  // item (no admin rights needed, unlike the installer's old HKLM Run key) — reconcile it to
+  // match the persisted setting on every launch, then again whenever Settings changes it.
+  applyAutoStart(getConfig().app.autoStart);
+  registerAutoStartHandler(applyAutoStart);
 
   buildTray();
   showWindow();

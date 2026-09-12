@@ -188,6 +188,44 @@ typecheck/tests, both are now fixed):
 - Test suite 101 → 112 (EPS driver: zone construction, `OUTPUTS`-bit parsing, `setOn`
   dispatch, unconfigured-output rejection; config validation: duplicate output id/index,
   out-of-range index; registry: a disabled device seeds no dashboard card).
+- Devices panel polish: the EPS output rows were an auto-fit grid that crammed 3-4 relay
+  rows onto one line — now a plain single-column list. Every device card collapses to just
+  its header (badge, name, id, host:port, enabled, remove) by default, so opening Devices
+  gives an overview instead of a wall of forms. The Cancel/Save footer was `position:
+  sticky` inside the scrollable list (could leave a sliver of the next card visible under
+  it) — restructured so it's a plain flex sibling entirely outside the scroll region.
+
+## Phase 7 — Settings panel, autostart toggle, presets/scheduler UI fixes  ✅
+
+- **Settings is now its own gear-icon entry in the toolbar**, separate from Devices —
+  display name, port, "start when Windows starts", "check for updates", the access
+  password, and config backup/diagnostics all moved out of a buried collapsible section
+  inside Devices into `SettingsPanel.tsx`. Room to add more app-level settings later
+  without further crowding the device editor.
+- **"Start when Windows starts" is now a real toggle**, not a fixed install-time decision.
+  Backed by Electron's own per-user login item (`app.setLoginItemSettings`, HKCU — no admin
+  rights needed at runtime) instead of the installer's old `HKLM…\Run` key (which
+  **required elevation to change** and so could never have been a toggle the running app
+  flips itself). `installer.nsh` no longer writes that key; the app applies the persisted
+  `autoStart` config value (default **on**, matching every install's behaviour before this
+  was a toggle) on every launch, and again whenever Settings changes it. The uninstaller
+  cleans up both the new HKCU value and the old HKLM one, so upgrading an existing install
+  doesn't leave a stale duplicate autostart entry behind.
+- **"Check for updates" is now reachable from the web UI**, not just the Electron tray menu
+  — `POST /api/updates/check` (new `backend/src/core/updateControl.ts`, same
+  registration-callback pattern as `httpControl.ts`'s HTTP restarter) triggers the same
+  `autoUpdater.checkForUpdates()` call the tray's own menu item does; the result still
+  arrives via the existing `updateInfo` broadcast, so every open browser sees it, not just
+  whoever clicked the button.
+- **Presets: "Default on startup" moved into the list itself** — a ⭐ toggle button per row,
+  instead of only being settable inside Edit. The list also now names which power unit a
+  preset defaults for when it isn't "all". Marking a specific EPS's default (rather than
+  "any") still needs Edit, since the list toggle is the simple all-power-units case.
+- **Scheduler's toolbar button now has a text label**, not just the clock icon.
+- Test suite 112 → 116 (`app-settings` name/port/autostart persistence + `portChanged`
+  reporting, defaults to `autoStart: true`; `updates/check` reports `triggered: false`
+  outside Electron; both new routes added to the "whole surface requires the access
+  password" sweep).
 
 ## Known gaps / decisions pending
 

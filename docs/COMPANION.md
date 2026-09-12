@@ -28,7 +28,7 @@ URLs below. Example from a real config:
 
 ## Actions Companion can fire (Generic HTTP Request)
 
-If an **access password** is set (Devices → App settings), it gates *everything* below too —
+If an **access password** is set (Settings), it gates *everything* below too —
 the whole control surface, not just configuration (see the README). Add an
 `Authorization: Bearer <token>` header to the Generic HTTP connection (`POST /api/auth/login`
 with `{"password": "..."}` returns a 30-day token) if you've set one. With no password set,
