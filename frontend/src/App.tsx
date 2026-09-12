@@ -95,15 +95,18 @@ function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
           {state?.app.name ?? "eXcontrol"}
         </div>
         <div className="toolbar">
-          <button className="text-btn" disabled={!state} onClick={openDevices}>
-            Devices
+          <button className="icon-text-btn" title="Devices" disabled={!state} onClick={openDevices}>
+            <DevicesIcon />
+            <span className="btn-label">Devices</span>
           </button>
           <button
-            className="text-btn"
+            className="icon-text-btn"
+            title="Presets"
             disabled={!state || firstRun}
             onClick={() => setPanel(panel === "presets" ? null : "presets")}
           >
-            Presets
+            <PresetsIcon />
+            <span className="btn-label">Presets</span>
           </button>
           <button
             className="icon-text-btn"
@@ -112,7 +115,7 @@ function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
             onClick={() => setPanel(panel === "schedule" ? null : "schedule")}
           >
             <ClockIcon />
-            Scheduler
+            <span className="btn-label">Scheduler</span>
             {scheduleCount > 0 && <span className="badge">{scheduleCount}</span>}
           </button>
           <button
@@ -167,6 +170,25 @@ function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
         ))}
       </div>
     </div>
+  );
+}
+
+function DevicesIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="3" y="4" width="18" height="5" rx="1.5" />
+      <rect x="3" y="15" width="18" height="5" rx="1.5" />
+      <circle cx="7" cy="6.5" r="0.5" fill="currentColor" stroke="none" />
+      <circle cx="7" cy="17.5" r="0.5" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function PresetsIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M7 3.5h10a1 1 0 0 1 1 1V21l-6-4-6 4V4.5a1 1 0 0 1 1-1Z" strokeLinejoin="round" />
+    </svg>
   );
 }
 
