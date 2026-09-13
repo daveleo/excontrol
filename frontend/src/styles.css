@@ -52,6 +52,21 @@ body {
   font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 input, select, button { font: inherit; color: inherit; }
+/* Baseline for every plain button/select/text-like input in the app, themed instead of the
+   browser/OS default control (which renders light — jarring in dark mode, and on Android
+   phones specifically renders as a stark white box no matter the page's own theme). Anything
+   more specific (.primary, .icon-btn, .modal input[type="text"], a range slider, …) still
+   overrides this at higher specificity — this only catches what nothing else claims. */
+button,
+select,
+input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]) {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 8px 12px;
+}
+button { cursor: pointer; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .app { max-width: 1140px; margin: 0 auto; padding: 20px; }
 .loading { color: var(--muted); }
@@ -99,7 +114,7 @@ input, select, button { font: inherit; color: inherit; }
 }
 .text-btn { padding: 8px 14px; font-size: 13px; font-weight: 600; }
 .icon-btn {
-  position: relative; width: 34px; height: 34px; flex: none;
+  position: relative; width: 34px; height: 34px; flex: none; padding: 0;
   display: inline-flex; align-items: center; justify-content: center;
 }
 .icon-text-btn {
@@ -320,7 +335,7 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-si
 .sched-label { flex: 1; min-width: 90px; }
 .sched-days { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
 .day {
-  width: 30px; height: 28px; border-radius: 6px; font-size: 11px; cursor: pointer;
+  width: 30px; height: 28px; padding: 0; border-radius: 6px; font-size: 11px; cursor: pointer;
   background: var(--panel-2); border: 1px solid var(--line); color: var(--muted);
 }
 .day.on { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -333,7 +348,7 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-si
 .sd-extend { background: var(--ok); border: none; color: #fff; font-weight: 700; padding: 14px 26px; border-radius: 10px; cursor: pointer; font-size: 16px; width: 100%; }
 .sd-extend:disabled { opacity: 0.6; }
 .sd-hint { font-size: 12px; color: var(--muted); margin: 0; }
-.sd-dismiss { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px; text-decoration: underline; margin-top: 6px; }
+.sd-dismiss { background: none; border: none; padding: 0; color: var(--muted); cursor: pointer; font-size: 13px; text-decoration: underline; margin-top: 6px; }
 
 .hint { color: var(--muted); font-size: 12px; margin: 0; }
 .hint.muted { opacity: 0.85; }
@@ -354,7 +369,7 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-si
 .wiz-head p { margin: 0; color: var(--muted); font-size: 14px; max-width: 60ch; }
 .wiz-x {
   background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
-  width: 34px; height: 34px; border-radius: 8px; cursor: pointer; flex: none; font-size: 14px;
+  width: 34px; height: 34px; padding: 0; border-radius: 8px; cursor: pointer; flex: none; font-size: 14px;
 }
 
 .wizard input, .wizard select {
@@ -404,7 +419,7 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-si
 .wiz-device.off { opacity: 0.6; }
 .wd-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .wd-toggle {
-  flex: none; width: 26px; height: 26px; background: none; border: none; color: var(--muted);
+  flex: none; width: 26px; height: 26px; padding: 0; background: none; border: none; color: var(--muted);
   cursor: pointer; font-size: 13px; display: inline-flex; align-items: center; justify-content: center;
 }
 .wd-toggle:hover { color: var(--text); }
@@ -414,7 +429,7 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-si
 }
 .wd-label { flex: 1; min-width: 140px; font-weight: 600; }
 .wd-id { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
-.wd-id input { width: 96px; font-family: ui-monospace, monospace; }
+.wd-id input { width: 96px; padding: 6px 8px; font-family: ui-monospace, monospace; }
 .wd-summary { font-family: ui-monospace, monospace; }
 .wd-remove { margin-left: auto; color: var(--err); border-color: color-mix(in srgb, var(--err) 40%, var(--line)); }
 
@@ -432,9 +447,9 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-si
 .wd-zones-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; font-size: 13px; font-weight: 600; }
 .wd-zone { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .wd-zone .z-label { flex: 1; min-width: 120px; }
-.wd-zone .z-id { width: 70px; font-family: ui-monospace, monospace; }
+.wd-zone .z-id { width: 70px; padding: 6px 8px; font-family: ui-monospace, monospace; }
 .wd-zone .z-screen { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
-.wd-zone .z-screen input { width: 64px; }
+.wd-zone .z-screen input { width: 64px; padding: 6px 8px; }
 .wd-zone-actions { display: flex; gap: 8px; }
 
 .wd-outputs { border-top: 1px dashed var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
