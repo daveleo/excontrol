@@ -1,11 +1,34 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import type { DeviceState, PowerDomain, AppState, AppInfo, UpdateInfo } from "@excontrol/shared";
+import type { DeviceState, PowerDomain, AppState, AppInfo, UpdateInfo, ZoneState } from "@excontrol/shared";
 import { BRAND } from "@excontrol/shared";
 import { bus, type DevicePatch } from "./bus.js";
 import { getConfig, isConfigured, isSettingsLocked } from "../config.js";
+import { rememberZones } from "./deviceCache.js";
 import { log } from "../logger.js";
+
+/**
+ * A driver rebuilding its zone list from scratch (on its first successful poll, or after a
+ * reconnect) only knows fresh identity + whatever it just read — e.g. NovaStar's
+ * `ensureZones()` sends bare `{ id, label }` before brightness/presets are known for this
+ * process lifetime. Without this merge, that bare patch would blank out perfectly good
+ * cached data (restored from disk at boot, see deviceCache.ts) for the split second before
+ * the real values arrive — or forever, if the device never finishes coming online. Only
+ * fields the incoming zone actually sets (not merely present-as-undefined, as EPS's
+ * `{ on: undefined }` placeholder is) are allowed to overwrite what we already had.
+ */
+function mergeZones(prev: ZoneState[], incoming: ZoneState[]): ZoneState[] {
+  return incoming.map((z) => {
+    const old = prev.find((p) => p.id === z.id);
+    if (!old) return z;
+    const merged = { ...old } as Record<string, unknown>;
+    for (const [k, v] of Object.entries(z)) {
+      if (v !== undefined) merged[k] = v;
+    }
+    return merged as unknown as ZoneState;
+  });
+}
 
 const here = dirname(fileURLToPath(import.meta.url));
 function pkgVersion(): string {
@@ -58,10 +81,11 @@ class Store {
     const next: DeviceState = {
       ...prev,
       ...patch,
-      zones: patch.zones ?? prev.zones,
+      zones: patch.zones ? mergeZones(prev.zones, patch.zones) : prev.zones,
       extra: patch.extra ? { ...prev.extra, ...patch.extra } : prev.extra,
     };
     this.devices.set(patch.id, next);
+    if (next.status === "online") rememberZones(next.id, next.zones, next.lastSeen ?? Date.now(), next.extra);
     bus.emit("broadcast", { t: "device", device: next });
   }
 

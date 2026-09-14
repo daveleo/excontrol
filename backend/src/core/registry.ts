@@ -8,6 +8,7 @@ import { ObsDriver } from "../drivers/obs.js";
 import { store } from "./state.js";
 import { bus } from "./bus.js";
 import { recomputePower } from "./power.js";
+import { getCachedZones, getCachedExtra, getCachedLastSeen, pruneCache, flushDeviceCache } from "./deviceCache.js";
 import { log } from "../logger.js";
 
 function build(cfg: DeviceConfig): Driver {
@@ -35,14 +36,20 @@ export async function startDevices(cfg: AppConfig): Promise<void> {
   // Disabled devices don't get a card at all — not even a perpetual "offline" one — so the
   // dashboard only ever shows equipment that's actually meant to be there.
   const enabled = cfg.devices.filter((d) => d.enabled);
-  const seed: DeviceState[] = enabled.map((d) => ({
-    id: d.id,
-    type: d.type,
-    label: d.label,
-    status: "connecting",
-    poweredBy: d.poweredBy ?? null,
-    zones: [],
-  }));
+  pruneCache(cfg.devices.map((d) => d.id));
+  const seed: DeviceState[] = enabled.map((d) => {
+    const cachedZones = getCachedZones(d.id);
+    return {
+      id: d.id,
+      type: d.type,
+      label: d.label,
+      status: "connecting",
+      poweredBy: d.poweredBy ?? null,
+      zones: cachedZones ?? [],
+      extra: getCachedExtra(d.id),
+      lastSeen: cachedZones ? getCachedLastSeen(d.id) : undefined,
+    };
+  });
   store.init(seed);
 
   for (const d of enabled) {
@@ -57,6 +64,7 @@ export async function startDevices(cfg: AppConfig): Promise<void> {
 export async function stopDevices(): Promise<void> {
   await Promise.allSettled(allDrivers().map((d) => d.stop()));
   drivers.clear();
+  flushDeviceCache();
 }
 
 /** test-only: inject a fake driver so preset / power code can resolve it without a socket */

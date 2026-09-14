@@ -33,6 +33,10 @@ export function DeviceCard({ device, powerLevel }: { device: DeviceState; powerL
   const isEps = device.type === "expromo-eps";
   const isObs = device.type === "obs";
   const multiZone = device.zones.length > 1;
+  const showingLastKnown =
+    !controllable &&
+    (device.zones.some((z) => (z.presets?.length ?? 0) > 0 || z.brightness != null || z.blackout != null || z.on != null) ||
+      (isEps && !!device.extra && Object.keys(device.extra).length > 0));
 
   return (
     <section className="card" data-status={device.status}>
@@ -48,6 +52,9 @@ export function DeviceCard({ device, powerLevel }: { device: DeviceState; powerL
         <p className="hint muted">Booting — this can take up to a minute.</p>
       )}
       {device.status === "offline" && !isEps && <p className="err">Not responding. {device.error}</p>}
+      {showingLastKnown && (
+        <p className="cache-hint">Showing last known configuration — not live while {device.label} is unreachable.</p>
+      )}
 
       {isEps && <EpsBody device={device} powerLevel={powerLevel} guard={guard} busy={busy} />}
 

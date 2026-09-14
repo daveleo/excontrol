@@ -227,6 +227,44 @@ typecheck/tests, both are now fixed):
   outside Electron; both new routes added to the "whole surface requires the access
   password" sweep).
 
+## Phase 8 — persisted last-known device state  ✅
+
+- **Problem**: restarting eXcontrol while a controller is unreachable (venue power off, or
+  the controller itself down) showed every zone blank — no brightness, no preset names —
+  because zone data only ever lived in memory, populated by a successful poll. The "Edit
+  preset" dropdown was the sharpest edge: it resolves a saved preset's numeric preset id to
+  a name via the live preset list, so with no live list it silently fell back to
+  "— preset: leave —", even though the saved preset (and its startup-default configuration)
+  were completely intact.
+- **Fix**: `backend/src/core/deviceCache.ts` persists each device's last confirmed-online
+  zones (brightness, blackout, preset names, EPS relay on/off) and EPS `extra` status
+  (SYSTEM/STATE/OUTPUTS) to a `excontrol.device-cache.json` sidecar next to the config,
+  debounced to disk, flushed on graceful shutdown. `registry.ts` seeds a device's initial
+  state from this cache at boot, before the first poll — so a browser hitting `/api/state`
+  the instant eXcontrol starts already sees the last-known picture, not a blank one.
+- A driver rebuilding its zone list from scratch (its first successful poll, or after a
+  reconnect) only knows fresh identity, not brightness/presets yet — NovaStar's
+  `ensureZones()` sends a bare `{ id, label }` before those are read. `state.ts`'s
+  `Store.apply()` now merges an incoming zone patch field-by-field onto whatever's already
+  known, instead of replacing the zone wholesale, so that bare rebuild can't blank out good
+  cached data (only fields the patch *actually sets* win — EPS's `{ on: undefined }`
+  placeholder, present but unset, doesn't clobber a cached `true`/`false`).
+- Frontend: wherever this last-known data is shown while a device isn't `online`, an orange
+  note says so — `PresetsPanel.tsx`'s per-zone preset/scene dropdown ("Preset list is from
+  the last known state — offline, not confirmed live") and `DeviceCard.tsx`'s dashboard card
+  ("Showing last known configuration — not live while … is unreachable"). New shared
+  `.cache-hint` style (`var(--warn)`, the same amber already used for "starting up" states).
+- Verified end-to-end with a scratch instance: a device seeded purely from a pre-written
+  cache file, host intentionally unreachable — `/api/state` immediately returns cached
+  brightness/presets with `status: "offline"`, and both new UI notes render correctly
+  (screenshotted via a headless-Chromium smoke test).
+- Test suite 116 → 127: `deviceCache.test.ts` (persist/restore across a simulated restart,
+  never caches an empty read, prunes removed devices), `state.test.ts` (bare-rebuild merge
+  doesn't blank cached fields, explicit-`undefined` doesn't clobber, a genuinely fresh value
+  still overwrites, online-only triggers the cache write, EPS `extra` also persists),
+  `registry.test.ts` (a freshly booted device shows cached brightness/presets before any
+  poll completes).
+
 ## Known gaps / decisions pending
 
 - Default Electron icon everywhere (taskbar, tray, installer) — needs artwork.

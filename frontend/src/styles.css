@@ -353,6 +353,9 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-si
 .hint { color: var(--muted); font-size: 12px; margin: 0; }
 .hint.muted { opacity: 0.85; }
 .err { color: var(--err); font-size: 12px; margin: 0; }
+/* shown wherever presets/brightness/outputs come from the last confirmed read, not a
+   live one — e.g. a controller that's offline or a power unit that's off. */
+.cache-hint { color: var(--warn); font-size: 12px; margin: 4px 0 0; }
 
 /* ---- setup wizard ---- */
 .wizard {

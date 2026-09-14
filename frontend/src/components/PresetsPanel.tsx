@@ -232,13 +232,21 @@ function PresetEditor({
                   />
                   Blackout
                 </label>
+                {r.device.status !== "online" && r.presetOptions.length > 0 && (
+                  <p className="cache-hint">Preset list is from the last known state — {r.device.label} is offline, not confirmed live.</p>
+                )}
               </div>
             )}
             {on && r.kind === "obs" && (
-              <select value={a?.scene ?? ""} onChange={(e) => patch(r.key, { scene: e.target.value || undefined })}>
-                <option value="">— scene: leave —</option>
-                {r.presetOptions.map((o) => <option key={o.id} value={o.name}>{o.name}</option>)}
-              </select>
+              <>
+                <select value={a?.scene ?? ""} onChange={(e) => patch(r.key, { scene: e.target.value || undefined })}>
+                  <option value="">— scene: leave —</option>
+                  {r.presetOptions.map((o) => <option key={o.id} value={o.name}>{o.name}</option>)}
+                </select>
+                {r.device.status !== "online" && r.presetOptions.length > 0 && (
+                  <p className="cache-hint">Scene list is from the last known state — {r.device.label} is offline, not confirmed live.</p>
+                )}
+              </>
             )}
             {on && r.kind === "eps" && (
               <select value={a?.power ?? "on"} onChange={(e) => patch(r.key, { power: e.target.value as "on" | "off" })}>
