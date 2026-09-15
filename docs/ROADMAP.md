@@ -265,6 +265,50 @@ typecheck/tests, both are now fixed):
   `registry.test.ts` (a freshly booted device shows cached brightness/presets before any
   poll completes).
 
+## Phase 9 — Companion module (developer build, unpublished)  🚧
+
+- **`companion/`** is a Bitfocus Companion module talking to eXcontrol's existing REST API
+  (see [`docs/COMPANION.md`](COMPANION.md) for the endpoint table). The ergonomic gap that
+  doc's generic-HTTP-module approach has — hand-typing device/zone/preset ids into URLs —
+  is gone here: every dropdown (zones, presets, EPS units) is populated live from
+  `/api/state` at connect time. Not submitted to Bitfocus's module store — it's loaded via
+  Companion's own **Import module package** (a `.tgz`), which is how any developer/unlisted
+  module is tested before publishing.
+- **Actions**: recall preset/scene, set brightness, blackout on/off/toggle, EPS power
+  on/off. **Feedbacks**: preset-is-active, blackout-is-on. Not yet built: independent EPS
+  output rows, scheduler actions, live `/ws` push (currently only re-fetches `/api/state` on
+  init/config change, not continuously — a button's feedback can go stale between those).
+- **Versioning**: pinned to `@companion-module/base@^1.14.0` / `@companion-module/tools@^2.8.0`
+  deliberately, not the current `2.x`/`3.x` lines — `@companion-module/base`'s own README
+  compatibility table lists Companion v4.3 (the version running on both real test machines)
+  as confirmed only through base `v2.0`, and v2.x dropped the `runEntrypoint()` bootstrap
+  function entirely, breaking the standard module shape. Re-check that table before bumping
+  either package.
+- **Packaging gotcha**: a module `.tgz` for Companion's "Import module package" must have
+  `companion/manifest.json` as its **first tar entry**, not nested under a wrapping
+  directory the way `npm pack` produces (`package/companion/manifest.json` fails with
+  "missing manifest" — confirmed by reading Companion's own bundled `main.js`, not
+  documented anywhere obvious). `@companion-module/tools`' `companion-module-build --dev`
+  produces a correctly-shaped package; don't hand-rustle `.tgz`s again.
+- **Bug found + fixed on real hardware**: `apiFetch()` unconditionally sent
+  `content-type: application/json`. eXcontrol's Fastify backend rejects that header on a
+  request with an empty body (`FST_ERR_CTP_EMPTY_JSON_BODY`) — every action that sends a
+  real JSON body (recall preset, set brightness/blackout) worked fine; EPS power on/off
+  (which takes no body) always 400'd. Only attach that header when a body is actually
+  present. Found via Companion's own connection log on the live Aarhus showroom instance —
+  OBS scene recall (has a body) worked, EPS power (no body) didn't, exactly matching the
+  fault line. Fixed in `v0.0.2`.
+- **Validated against real infrastructure, not just CBLATest**: this module was built,
+  imported, connected (green "OK", live `/api/state` data populating every dropdown), and
+  bug-fixed against the actual Aarhus showroom's Companion instance — the same box already
+  driving real Stream Deck buttons for the room via the official NovaStar modules. A
+  deliberately empty button slot was used for the eXcontrol test action; nothing else on
+  that Stream Deck's existing pages was touched. The one live-fire test run so far (OBS
+  scene recall, already-active scene, so no visible effect) passed; the EPS power on/off fix
+  is deployed (`v0.0.2`, connection switched over, shows OK) but not yet live-fire retested.
+- **Known gap**: no LICENSE file in the package (`companion-module-build`'s license-inventory
+  check warns but doesn't fail) — cosmetic, add one before considering publishing.
+
 ## Known gaps / decisions pending
 
 - Default Electron icon everywhere (taskbar, tray, installer) — needs artwork.
