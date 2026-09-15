@@ -61,7 +61,10 @@ class ExcontrolInstance extends InstanceBase {
   }
 
   async apiFetch(path, options = {}) {
-    const headers = { 'content-type': 'application/json', ...(options.headers || {}) }
+    // eXcontrol's Fastify backend rejects a request that declares a JSON content-type but
+    // sends no body (FST_ERR_CTP_EMPTY_JSON_BODY) — only bodyless routes like EPS power
+    // on/off hit this, since every other action already sends a real JSON body.
+    const headers = { ...(options.body ? { 'content-type': 'application/json' } : {}), ...(options.headers || {}) }
     if (this.token) headers.authorization = `Bearer ${this.token}`
     const res = await fetch(this.baseUrl() + path, { ...options, headers })
     if (res.status === 401 && this.config.password && !options._retried) {

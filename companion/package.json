@@ -1,11 +1,14 @@
 {
   "name": "companion-module-excontrol",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "description": "Bitfocus Companion module for eXcontrol (developer/unpublished)",
   "main": "main.js",
   "license": "MIT",
   "dependencies": {
-    "@companion-module/base": "^1.0.0"
+    "@companion-module/base": "^1.14.0"
+  },
+  "devDependencies": {
+    "@companion-module/tools": "^2.8.0"
   }
 }

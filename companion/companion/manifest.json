@@ -1,9 +1,10 @@
 {
   "id": "excontrol",
+  "type": "connection",
   "name": "eXcontrol",
   "shortname": "excontrol",
   "description": "Control NovaStar H-series/COEX, Expromo EPS power and OBS Studio through an eXcontrol install — presets, brightness, blackout, power.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "apiversion": "1.0.0",
   "license": "MIT",
   "repository": "https://github.com/daveleo/excontrol",
@@ -15,7 +16,7 @@
   "products": ["eXcontrol"],
   "keywords": ["led", "novastar", "obs", "power", "eps"],
   "runtime": {
-    "type": "node18",
+    "type": "node22",
     "api": "nodejs-ipc",
     "apiVersion": "1.1.0",
     "entrypoint": "main.js"
