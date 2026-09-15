@@ -161,7 +161,7 @@ typecheck/tests, both are now fixed):
   `1`=ON) parsed into per-output state on every poll. Deliberately **no extra security
   tier** for relay control — same access-password gate as everything else, per explicit
   decision (no per-customer need identified yet).
-  - **Verified against real production hardware** (the Aarhus showroom EPS): `STATE=FULLY_ON`
+  - **Verified against real production hardware** (a production showroom EPS): `STATE=FULLY_ON`
     and `STATE=OFF` both occur exactly as the existing driver already assumed (powering on
     → `FULLY_ON`, switching one relay off → `PARTIAL_ON` with the `OUTPUTS` bit updating
     correctly, back on → `FULLY_ON` again) — the new Expromo EPS v2.2 protocol doc's own
@@ -295,17 +295,17 @@ typecheck/tests, both are now fixed):
   request with an empty body (`FST_ERR_CTP_EMPTY_JSON_BODY`) — every action that sends a
   real JSON body (recall preset, set brightness/blackout) worked fine; EPS power on/off
   (which takes no body) always 400'd. Only attach that header when a body is actually
-  present. Found via Companion's own connection log on the live Aarhus showroom instance —
+  present. Found via Companion's own connection log on a live production showroom instance —
   OBS scene recall (has a body) worked, EPS power (no body) didn't, exactly matching the
   fault line. Fixed in `v0.0.2`.
 - **Validated against real infrastructure, not just CBLATest**: this module was built,
   imported, connected (green "OK", live `/api/state` data populating every dropdown), and
-  bug-fixed against the actual Aarhus showroom's Companion instance — the same box already
+  bug-fixed against a real production showroom's Companion instance — the same box already
   driving real Stream Deck buttons for the room via the official NovaStar modules. A
   deliberately empty button slot was used for the eXcontrol test action; nothing else on
-  that Stream Deck's existing pages was touched. The one live-fire test run so far (OBS
-  scene recall, already-active scene, so no visible effect) passed; the EPS power on/off fix
-  is deployed (`v0.0.2`, connection switched over, shows OK) but not yet live-fire retested.
+  that Stream Deck's existing pages was touched. Both live-fire tests have now passed: OBS
+  scene recall (targeting the already-active scene, so no visible effect) and, after the
+  `v0.0.2` fix, EPS power on/off for real.
 - **Known gap**: no LICENSE file in the package (`companion-module-build`'s license-inventory
   check warns but doesn't fail) — cosmetic, add one before considering publishing.
 
