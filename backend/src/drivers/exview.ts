@@ -21,6 +21,10 @@ import { netReason } from "../setup/neterr.js";
  *
  * Video source byte values (shared by Set/Query video source): 0x00 Android, 0x01 Windows,
  * 0x02 HDMI1, 0x03 HDMI2, 0x04 HDMI3, 0x06 HDMI4 — note 0x05 is skipped entirely, not a typo.
+ * Only Android + the model's HDMI inputs are exposed as presets here (not Windows — the
+ * eXview line doesn't run one). HDMI signal-presence (0xC25B) is polled alongside everything
+ * else and merged onto each HDMI preset as `hasSignal`, independent of which is selected —
+ * mirrors the Crestron module's per-input `Active_Fb` outputs.
  *
  * "Power on/off" (0xC003, data 0x5E on / 0x5F sleep) is a quick, reversible video-mute the
  * device answers everything else through — this is what's exposed as this zone's on/off,
@@ -38,10 +42,13 @@ const CODE = {
   SET_BRIGHTNESS: "C21F", // -> C220 ack(status)
   QUERY_SOURCE: "C211", // -> C212, data[0] source byte
   SET_SOURCE: "C213", // -> C214 ack(status)
+  HDMI_SIGNAL: "C25B", // -> C25C, data[0..3]: HDMI1-4 signal present (0x01) / not (0x00)
 } as const;
 
-/** id -> name for the zone's presets; only HDMI1/2 for Edge, HDMI1-4 for AIO. */
-const HDMI_SOURCES: { id: number; name: string }[] = [
+const ANDROID_SOURCE: Preset = { id: 0x00, name: "Android" };
+/** id -> name for the HDMI inputs; only HDMI1/2 for Edge, HDMI1-4 for AIO. Android (above)
+ *  is always offered regardless of model — it's the unit's built-in OS, not a cable input. */
+const HDMI_SOURCES: Preset[] = [
   { id: 0x02, name: "HDMI 1" },
   { id: 0x03, name: "HDMI 2" },
   { id: 0x04, name: "HDMI 3" },
@@ -106,7 +113,17 @@ export class ExviewDriver extends BaseDriver {
 
   private presetList(): Preset[] {
     const count = this.c.model === "aio" ? 4 : 2;
-    return HDMI_SOURCES.slice(0, count);
+    return [ANDROID_SOURCE, ...HDMI_SOURCES.slice(0, count)];
+  }
+
+  /** Same list, with each HDMI entry's live signal-presence merged in. Android has no
+   *  "signal" concept in this protocol (it's not a cable input) — left unset for it. */
+  private presetsWithSignal(hdmiSignalBits: number[]): Preset[] {
+    return this.presetList().map((p) => {
+      const hdmiIndex = HDMI_SOURCES.findIndex((h) => h.id === p.id);
+      if (hdmiIndex < 0) return p;
+      return { ...p, hasSignal: hdmiSignalBits[hdmiIndex] === 1 };
+    });
   }
 
   async start(): Promise<void> {
@@ -115,11 +132,12 @@ export class ExviewDriver extends BaseDriver {
   }
 
   private async poll(): Promise<void> {
-    const [statusReply, volReply, brightReply, srcReply] = await Promise.all([
+    const [statusReply, volReply, brightReply, srcReply, hdmiReply] = await Promise.all([
       this.send(CODE.QUERY_SCREEN_STATUS, []),
       this.send(CODE.QUERY_VOLUME, []),
       this.send(CODE.QUERY_BRIGHTNESS, []),
       this.send(CODE.QUERY_SOURCE, []),
+      this.send(CODE.HDMI_SIGNAL, []),
     ]);
     const on = statusReply.data[0] === 0x80;
     this.patchZone(ZONE, {
@@ -127,7 +145,7 @@ export class ExviewDriver extends BaseDriver {
       volume: volReply.data[0],
       brightness: brightReply.data[0],
       activePreset: srcReply.data[0],
-      presets: this.presetList(),
+      presets: this.presetsWithSignal(hdmiReply.data),
     });
     this.online();
   }

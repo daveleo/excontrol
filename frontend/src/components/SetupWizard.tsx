@@ -384,8 +384,8 @@ function DeviceForm({
           <label className="field narrow">
             <span>Model</span>
             <select value={d.model ?? "edge"} onChange={(e) => onChange({ model: e.target.value as "edge" | "aio" })}>
-              <option value="edge">Edge (2 HDMI inputs)</option>
-              <option value="aio">AIO (4 HDMI inputs)</option>
+              <option value="edge">Edge</option>
+              <option value="aio">AIO</option>
             </select>
           </label>
         )}

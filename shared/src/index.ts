@@ -24,6 +24,9 @@ export type ConnectionStatus =
 export interface Preset {
   id: number;
   name: string;
+  /** live signal-presence for a physical input (eXview HDMI ports) — absent where the
+   *  concept doesn't apply (a saved preset, an internal source like Android, etc.). */
+  hasSignal?: boolean;
 }
 
 /** One controllable screen on a controller, or (for an EPS with independent output

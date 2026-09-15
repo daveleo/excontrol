@@ -225,12 +225,16 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-si
 .presets-section { display: flex; flex-direction: column; }
 .presets { display: flex; flex-wrap: wrap; gap: 8px; }
 .preset {
+  display: inline-flex; align-items: center; gap: 6px;
   background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
   padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 13px;
 }
 .preset:hover:not(:disabled) { border-color: var(--accent); }
 .preset.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 .preset:disabled { opacity: 0.5; cursor: not-allowed; }
+/* live signal-presence on a physical input (eXview HDMI ports) — independent of selection */
+.sig-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; }
+.sig-dot.live { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
 
 .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .actions button {

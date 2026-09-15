@@ -143,7 +143,7 @@ function ZoneControls({
 
       {(zone.presets?.length ?? 0) > 0 && (
         <div className="presets-section">
-          <div className="section-label">{deviceType === "obs" ? "Scenes" : "Presets"}</div>
+          <div className="section-label">{deviceType === "obs" ? "Scenes" : deviceType === "exview" ? "Source" : "Presets"}</div>
           <div className="presets">
             {zone.presets!.map((p) => (
               <button
@@ -151,7 +151,9 @@ function ZoneControls({
                 className={zone.activePreset === p.id ? "preset active" : "preset"}
                 disabled={disabled}
                 onClick={() => onPreset(p.id)}
+                title={p.hasSignal == null ? undefined : p.hasSignal ? "Signal present" : "No signal"}
               >
+                {p.hasSignal != null && <span className={`sig-dot ${p.hasSignal ? "live" : ""}`} />}
                 {p.name}
               </button>
             ))}
