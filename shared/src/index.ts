@@ -41,6 +41,11 @@ export interface ZoneState {
   activePreset?: number;
   /** a plain on/off zone (EPS relay, or an eXview's own power state) rather than a brightness one */
   on?: boolean;
+  /** eXview only: the real power state, richer than `on` above — a prolonged blackout can
+   *  auto-transition into a restricted "standby" the device's own firmware enters after a
+   *  configurable timeout (set on the device itself, invisible to this app until it happens),
+   *  not just whatever this app last commanded. `on` mirrors this (true only for "on"). */
+  powerState?: "on" | "blackout" | "standby";
 }
 
 export interface DeviceState {

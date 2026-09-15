@@ -217,8 +217,11 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-si
 .blackout-btn.on { background: #000; border-color: var(--err); color: #fff; }
 .blackout-btn.on .bo-dot { background: var(--err); box-shadow: 0 0 8px var(--err); }
 
-/* a plain power toggle (eXview) — unlike blackout, "on" is the good/expected state */
-.power-btn.on { border-color: var(--ok); }
+/* a plain power toggle (eXview) — unlike blackout, "on" is the good/expected state, so
+   don't inherit blackout's black/red "alert" look; stay on the normal theme-aware panel */
+.power-btn.on { background: var(--panel-2); border-color: var(--ok); color: var(--text); }
+.power-btn.standby { background: color-mix(in srgb, var(--warn) 14%, var(--panel-2)); border-color: var(--warn); }
+.power-btn.standby .bo-dot { background: var(--warn); box-shadow: 0 0 8px var(--warn); }
 .power-btn.on .bo-dot { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
 
 .section-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 6px; }

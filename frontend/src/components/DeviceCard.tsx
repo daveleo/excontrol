@@ -116,9 +116,19 @@ function ZoneControls({
       {showLabel && <div className="zone-label">{zone.label}</div>}
 
       {zone.on != null && (
-        <button className={`blackout-btn power-btn ${zone.on ? "on" : ""}`} disabled={disabled} onClick={() => onOn(!zone.on)}>
+        <button
+          className={`blackout-btn power-btn ${zone.powerState === "standby" ? "standby" : zone.on ? "on" : ""}`}
+          disabled={disabled}
+          onClick={() => onOn(!zone.on)}
+        >
           <span className="bo-dot" />
-          {zone.on ? "On — tap to turn off" : "Off — tap to turn on"}
+          {zone.powerState === "standby"
+            ? "Standby — tap to wake"
+            : zone.powerState === "blackout"
+              ? "Blackout — tap to turn on"
+              : zone.on
+                ? "On — tap to turn off"
+                : "Off — tap to turn on"}
         </button>
       )}
 

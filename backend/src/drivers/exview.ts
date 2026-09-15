@@ -26,16 +26,47 @@ import { netReason } from "../setup/neterr.js";
  * else and merged onto each HDMI preset as `hasSignal`, independent of which is selected —
  * mirrors the Crestron module's per-input `Active_Fb` outputs.
  *
- * "Power on/off" (0xC003, data 0x5E on / 0x5F sleep) is a quick, reversible video-mute the
- * device answers everything else through — this is what's exposed as this zone's on/off,
- * matching what a day-to-day "screen on/off" button should do. The protocol also has a
- * separate deep Standby/Restart (0xC007/0xC009) that reboots the unit into a restricted
- * state answering almost nothing for ~25s; deliberately not exposed here.
+ * ---- Three real power states, not two (see docs/ROADMAP.md Phase 11 for the full story) ----
+ *
+ * "Power off" (0xC003, data 0x5F) is an immediate, reversible video-mute ("Blackout") — the
+ * device stays fully responsive. But a prolonged Blackout auto-transitions into a deep,
+ * restricted "Standby" on its own (the timeout is a setting on the device itself, e.g. 5
+ * minutes — invisible to this app until it happens); the same restricted state is also
+ * reachable directly via 0xC007. In that restricted state the unit reboots its LED relays
+ * and its own "sending card," which comes back up in a low-power mode that only accepts one
+ * thing: the special wake packet below — every other command, including the plain 0xC003
+ * wake byte, gets rejected.
+ *
+ * Distinguishing Blackout from Standby needs two queries, not one, and getting this wrong is
+ * an easy trap — a real bug in an earlier internal tool (see exview-control's
+ * PROJECT_SNAPSHOT.md) short-circuited to "Eco Standby" the moment 0xC020 reported true,
+ * without checking whether 0xC005 also stopped answering normally. The correct resolution,
+ * used here:
+ *
+ *   1. Query 0xC020 ("true/fake standby query") and 0xC005 ("sleep/wake query") together.
+ *   2. Either one coming back as the literal ASCII reply "Unsupported protocol" (not a
+ *      normal framed reply at all) => Standby (the "Active Standby" variant — restricted,
+ *      but 0xC020 and the wake packet still work).
+ *   3. 0xC005 timing out entirely *and* 0xC020 == 1 => Standby (the "Eco Standby" variant —
+ *      even 0xC020 style probes may go unanswered depending on firmware, but this app only
+ *      needs to tell "on/blackout" from "standby", not tell the two standby flavors apart).
+ *   4. 0xC005 == 0x80 => On. 0xC005 == 0x00 => Blackout.
+ *   5. Anything else (e.g. both time out) => Unknown — don't guess.
+ *
+ * Volume/brightness/source/HDMI-signal are only queried when state is On or Blackout — in
+ * Standby they'd also just come back "Unsupported protocol", so there's nothing to read.
+ *
+ * Waking from Standby needs the dedicated 10-byte wake packet (`AA BB CC 01 00 00 01 DD EE
+ * FF`, no sync preamble, not a normal framed command, no reply) — the plain 0xC003 wake byte
+ * is exactly the "everything else" that gets rejected while restricted. Confirmed against
+ * real hardware: full recovery is a two-reboot affair, roughly 70s wall-clock from a direct
+ * 0xC007 to fully "On" again.
  */
 
 const CODE = {
-  QUERY_SCREEN_STATUS: "C005", // -> C006, data[0]: 0x80 awake, 0x00 asleep
-  SET_POWER: "C003", // -> C004, data[0] echoes what was sent (0x5E on / 0x5F sleep) — not a status word
+  QUERY_SCREEN_STATUS: "C005", // -> C006, data[0]: 0x80 awake, 0x00 blackout
+  QUERY_TRUE_STANDBY: "C020", // -> C021, data[0]: 1 often means Standby, but see resolvePowerState — not trustworthy alone
+  SET_POWER: "C003", // -> C004, data[0] echoes what was sent (0x5E on / 0x5F blackout) — not a status word
   QUERY_VOLUME: "C201", // -> C202, data[0] 0-100
   SET_VOLUME: "C203", // -> C204 ack(status)
   QUERY_BRIGHTNESS: "C21D", // -> C21E, data[0] 0-100
@@ -44,6 +75,17 @@ const CODE = {
   SET_SOURCE: "C213", // -> C214 ack(status)
   HDMI_SIGNAL: "C25B", // -> C25C, data[0..3]: HDMI1-4 signal present (0x01) / not (0x00)
 } as const;
+
+/** Not a framed reply at all — just this literal ASCII text — sent for almost anything while
+ *  the device is in (either flavor of) Standby. */
+const UNSUPPORTED_PROTOCOL_TEXT = "Unsupported protocol";
+/** Sentinel `ParsedReply.code` used for the text above, so callers can check it like any
+ *  other reply code instead of every call site needing its own string search. */
+const UNSUPPORTED_PROTOCOL_CODE = "UNSUPPORTED";
+
+/** The only thing a Standby-restricted unit accepts. Raw bytes, no sync preamble, no
+ *  checksum, no reply — confirmed against real hardware. */
+const WAKE_PACKET = Buffer.from([0xaa, 0xbb, 0xcc, 0x01, 0x00, 0x00, 0x01, 0xdd, 0xee, 0xff]);
 
 const ANDROID_SOURCE: Preset = { id: 0x00, name: "Android" };
 /** id -> name for the HDMI inputs; only HDMI1/2 for Edge, HDMI1-4 for AIO. Android (above)
@@ -80,8 +122,12 @@ interface ParsedReply {
 }
 
 /** Parse + validate a reply frame. Throws on anything that doesn't look right, rather than
- *  silently returning nonsense — a garbled/short reply becomes a failed poll, not bad state. */
+ *  silently returning nonsense — a garbled/short reply becomes a failed poll, not bad state.
+ *  The one deliberate exception: the plain-text "Unsupported protocol" reply a Standby unit
+ *  sends for almost everything isn't a framed reply at all, so it's recognized up front
+ *  rather than falling through to (and failing) the framed-reply checks below. */
 function parseReply(buf: Buffer): ParsedReply {
+  if (buf.includes(UNSUPPORTED_PROTOCOL_TEXT, 0, "latin1")) return { code: UNSUPPORTED_PROTOCOL_CODE, data: [] };
   if (buf.length < 39) throw new Error(`eXview: reply too short (${buf.length} bytes)`);
   for (let i = 0; i < 7; i++) if (buf[i] !== 0x55) throw new Error("eXview: bad sync bytes");
   if (buf[11] !== 0xd1 || buf[13] !== 0xd0) throw new Error("eXview: unexpected reply header");
@@ -102,8 +148,13 @@ function ackOk(data: number[]): boolean {
   return data.length >= 2 && (data[0]! | (data[1]! << 8)) === 1;
 }
 
+type PowerState = "on" | "blackout" | "standby" | "unknown";
+
 export class ExviewDriver extends BaseDriver {
   private readonly c: ExviewConfig;
+  /** Updated on every poll; consulted by setOn() to pick the right wake mechanism — the
+   *  plain wake byte only works from Blackout, Standby needs the dedicated wake packet. */
+  private lastPowerState: PowerState = "unknown";
 
   constructor(cfg: ExviewConfig) {
     super(cfg);
@@ -131,17 +182,52 @@ export class ExviewDriver extends BaseDriver {
     this.startPolling(() => this.poll());
   }
 
-  private async poll(): Promise<void> {
-    const [statusReply, volReply, brightReply, srcReply, hdmiReply] = await Promise.all([
+  /** See this file's header comment for the full derivation. Queries 0xC020 and 0xC005
+   *  together and combines them — neither alone can reliably tell Blackout from Standby. */
+  private async resolvePowerState(): Promise<{ state: PowerState; sleepWake?: ParsedReply }> {
+    const [standbySettled, sleepWakeSettled] = await Promise.allSettled([
+      this.send(CODE.QUERY_TRUE_STANDBY, []),
       this.send(CODE.QUERY_SCREEN_STATUS, []),
+    ]);
+    const standby = standbySettled.status === "fulfilled" ? standbySettled.value : null;
+    const sleepWake = sleepWakeSettled.status === "fulfilled" ? sleepWakeSettled.value : null;
+
+    // Neither probe got any reply at all — genuinely unreachable, not a power state to
+    // report. Throw so the usual startPolling -> offline() path handles it like every other
+    // driver's connectivity failure, rather than this becoming a fourth silent "unknown".
+    if (standby == null && sleepWake == null) throw new Error("eXview: no reply to either power-state probe");
+
+    const isUnsupported = (r: ParsedReply | null) => r?.code === UNSUPPORTED_PROTOCOL_CODE;
+    if (isUnsupported(standby) || isUnsupported(sleepWake)) return { state: "standby" };
+    if (sleepWake == null && standby?.data[0] === 1) return { state: "standby" };
+    if (sleepWake?.data[0] === 0x80) return { state: "on", sleepWake };
+    if (sleepWake?.data[0] === 0x00) return { state: "blackout", sleepWake };
+    return { state: "unknown" }; // got a reply, but not one that maps to anything known
+  }
+
+  private async poll(): Promise<void> {
+    const { state } = await this.resolvePowerState();
+    this.lastPowerState = state;
+
+    if (state === "standby" || state === "unknown") {
+      // Nothing else is worth asking — Standby answers every other query with the same
+      // "Unsupported protocol" text, and a genuinely Unknown state means we can't trust a
+      // fresh read either way. Keep whatever brightness/volume/source were last known
+      // (BaseDriver/Store already do this across a real disconnect) rather than blanking them.
+      this.patchZone(ZONE, { on: false, powerState: state === "standby" ? "standby" : undefined });
+      this.online();
+      return;
+    }
+
+    const [volReply, brightReply, srcReply, hdmiReply] = await Promise.all([
       this.send(CODE.QUERY_VOLUME, []),
       this.send(CODE.QUERY_BRIGHTNESS, []),
       this.send(CODE.QUERY_SOURCE, []),
       this.send(CODE.HDMI_SIGNAL, []),
     ]);
-    const on = statusReply.data[0] === 0x80;
     this.patchZone(ZONE, {
-      on,
+      on: state === "on",
+      powerState: state,
       volume: volReply.data[0],
       brightness: brightReply.data[0],
       activePreset: srcReply.data[0],
@@ -151,13 +237,29 @@ export class ExviewDriver extends BaseDriver {
   }
 
   async setOn(zoneId: string, on: boolean): Promise<void> {
-    // Unlike every other Set command here, C004's ack echoes the sent byte back (1 byte),
-    // not a 2-byte success/failure status word — confirmed against real hardware, where
-    // treating it as a status word (ackOk) made every real power command look rejected.
-    const want = on ? 0x5e : 0x5f;
-    const reply = await this.send(CODE.SET_POWER, [want]);
-    if (reply.data[0] !== want) throw new Error("eXview: power command not confirmed");
-    this.patchZone(zoneId, { on });
+    if (!on) {
+      // Blackout — the quick, reversible mute. (There's no app-facing way to command deep
+      // Standby directly; the device gets there on its own after a prolonged Blackout.)
+      const reply = await this.send(CODE.SET_POWER, [0x5f]);
+      if (reply.data[0] !== 0x5f) throw new Error("eXview: power command not confirmed");
+      this.patchZone(zoneId, { on: false, powerState: "blackout" });
+      this.lastPowerState = "blackout";
+      return;
+    }
+
+    if (this.lastPowerState === "standby" || this.lastPowerState === "unknown") {
+      // A Standby-restricted unit rejects the plain wake byte along with everything else —
+      // only the dedicated wake packet works, and it sends no reply. Recovery is a two-reboot
+      // affair (~70s), so this can't confirm success synchronously; the next poll(s) will
+      // pick up the real state once the unit comes back.
+      await this.sendRaw(WAKE_PACKET);
+      return;
+    }
+
+    const reply = await this.send(CODE.SET_POWER, [0x5e]);
+    if (reply.data[0] !== 0x5e) throw new Error("eXview: power command not confirmed");
+    this.patchZone(zoneId, { on: true, powerState: "on" });
+    this.lastPowerState = "on";
   }
 
   async setBrightness(zoneId: string, pct: number): Promise<void> {
@@ -189,13 +291,14 @@ export class ExviewDriver extends BaseDriver {
   private async probeOnce(): Promise<ProbeResult> {
     const hp = `${this.c.host}:${this.c.port}`;
     try {
-      const reply = await this.send(CODE.QUERY_SCREEN_STATUS, []);
-      const awake = reply.data[0] === 0x80;
+      const { state } = await this.resolvePowerState();
+      if (state === "unknown") return { ok: false, hint: "unreachable", detail: `No usable reply from ${hp}.` };
+      const label = state === "on" ? "on" : state === "blackout" ? "blacked out" : "in standby";
       return {
         ok: true,
         hint: "ok",
         detail: `Connected to the eXview ${this.c.model === "aio" ? "AIO" : "Edge"}.`,
-        info: awake ? "screen on" : "screen off",
+        info: `screen ${label}`,
       };
     } catch (e) {
       const net = netReason(e, hp);
@@ -208,7 +311,18 @@ export class ExviewDriver extends BaseDriver {
   /** Send one frame, wait for the matching reply. One UDP socket per command — simple,
    *  and this protocol has no persistent-connection concept to keep alive anyway. */
   private send(setCode: string, dataBytes: number[], timeoutMs = 3000): Promise<ParsedReply> {
-    const frame = buildFrame(setCode, dataBytes);
+    return this.sendAndMaybeWait(buildFrame(setCode, dataBytes), timeoutMs, true) as Promise<ParsedReply>;
+  }
+
+  /** Fire a raw buffer with no expectation of a reply (the Standby wake packet). Still
+   *  briefly listens in case one arrives, but resolves either way once sent. */
+  private sendRaw(frame: Buffer): Promise<void> {
+    return this.sendAndMaybeWait(frame, 500, false) as Promise<void>;
+  }
+
+  private sendAndMaybeWait(frame: Buffer, timeoutMs: number, expectReply: true): Promise<ParsedReply>;
+  private sendAndMaybeWait(frame: Buffer, timeoutMs: number, expectReply: false): Promise<void>;
+  private sendAndMaybeWait(frame: Buffer, timeoutMs: number, expectReply: boolean): Promise<ParsedReply | void> {
     return new Promise((resolve, reject) => {
       const sock = createSocket("udp4");
       let settled = false;
@@ -220,10 +334,14 @@ export class ExviewDriver extends BaseDriver {
         sock.close();
         fn();
       };
-      const timer = setTimeout(() => finish(() => reject(new Error(`eXview timeout waiting for ${setCode}`))), timeoutMs);
+      const timer = setTimeout(
+        () => finish(() => (expectReply ? reject(new Error("eXview: timeout waiting for reply")) : resolve())),
+        timeoutMs,
+      );
       sock.on("error", (e) => finish(() => reject(e)));
       sock.on("message", (msg) => {
         finish(() => {
+          if (!expectReply) return resolve();
           try {
             resolve(parseReply(msg));
           } catch (e) {

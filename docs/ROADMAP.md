@@ -358,6 +358,65 @@ typecheck/tests, both are now fixed):
   subnet auto-discovery scan — out of scope for what was asked, straightforward to add later
   following the same pattern as the other device types in each.
 
+## Phase 11 — eXview: Android source, HDMI signal indicator, and the real On/Blackout/Standby model  ✅
+
+- **Android added as a selectable source** alongside the model's HDMI inputs, on both Edge
+  and AIO — it's the unit's built-in OS, not a cable input.
+- **Per-input signal-presence indicator** (0xC25B, polled every cycle) — each HDMI preset
+  button now carries `hasSignal`, independent of which input is selected. Mirrors the
+  Crestron module's per-port `Active_Fb` outputs. `Preset` is a shared type (NovaStar/OBS
+  use it too); this is a new optional field those simply never set.
+- **The device has three real power states, not two — On / Blackout / Standby — and
+  distinguishing the last two needs two queries combined, not one.** This came from reading
+  three of the user's other repos, not from re-deriving it live: the full 106-command
+  protocol reference (`exview-aio-driver-wiki`), a real field-deployed Crestron SIMPL+
+  module (`expromo-exview-edge-crestron`), and a Tauri desktop tool's own session notes
+  (`exview-control`'s `PROJECT_SNAPSHOT.md`) — the last of which documents a **real bug in
+  that tool's own `resolvePowerState()`**, deliberately not repeated here.
+  - Blackout (0xC003, data `0x5F`) is instant and reversible — the unit stays fully
+    responsive. But a **prolonged Blackout auto-transitions into a restricted Standby on its
+    own** (the timeout is a setting on the device itself — the user's unit has it at 5
+    minutes — invisible to any control software until it happens). The same restricted state
+    is also reachable directly via `0xC007`.
+  - In that restricted state, `0xC005` (the plain sleep/wake query used to distinguish
+    On/Blackout) either gets no reply at all, or gets replied to with a completely different,
+    **non-framed reply**: the literal ASCII text `"Unsupported protocol"`. There's a second
+    query, `0xC020` ("true/fake standby"), whose own reply is not reliable alone either — the
+    bug in the reference tool was trusting `0xC020 == 1` as sufficient proof of Standby
+    without checking whether `0xC005` had *also* stopped answering normally. **Fixed here by
+    querying both every cycle and combining them**: either coming back as the
+    `"Unsupported protocol"` text means Standby, full stop; failing that, `0xC005` timing out
+    completely while `0xC020 == 1` also means Standby; otherwise `0xC005`'s own byte
+    (`0x80`/`0x00`) decides On vs Blackout, and total silence from *both* queries is treated
+    as a genuine connectivity failure (`offline`, same as any other driver), not a fourth
+    silent power state.
+  - Volume/brightness/source/HDMI-signal are skipped entirely while Standby is detected —
+    they'd only come back as the same unsupported-protocol text.
+  - **Waking from Standby needs a completely different, undocumented-in-the-command-table
+    packet**: `AA BB CC 01 00 00 01 DD EE FF` — 10 raw bytes, no sync preamble, no checksum,
+    no reply. The ordinary `0xC003` wake byte is exactly the "everything else" Standby
+    rejects. The driver tracks the last resolved power state and picks the right one
+    automatically — Blackout's plain wake byte, or Standby's (and initial-Unknown's) special
+    packet — so `setOn(true)` behaves correctly regardless of which state it's actually
+    waking from.
+  - New `ZoneState.powerState?: "on" | "blackout" | "standby"` surfaces this in the API/UI —
+    richer than the existing plain `on` boolean (still populated, true only for "on"). The
+    dashboard's on/off button now shows three distinct labels/colors instead of two, with a
+    dedicated amber "Standby — tap to wake" state.
+- **Verified end-to-end against real hardware, including the full ~30-70s standby/wake
+  cycle**: triggered real Standby via `0xC007` (the direct path — verified equivalent to
+  what a genuinely long Blackout eventually reaches on its own) and watched the driver
+  correctly report **no power state at all during the device's own unreachable reboot
+  window**, then **Standby** once it settled, persisting indefinitely as documented. Then
+  called the real `setOn(true)` and watched it send the dedicated wake packet and the device
+  recover to fully **On** with every prior setting (volume, brightness, HDMI input) intact —
+  confirming the whole detection *and* recovery path against a real unit, not just the
+  fake-server test suite (21 tests, `exview.test.ts`, including dedicated regression
+  coverage for the exact reference-tool bug described above).
+- **Cosmetic fix**: the on/off button borrowed blackout's black/red "alert" styling, which
+  reads backwards for a plain "screen is on" state in light mode especially — now a
+  theme-aware green-on/amber-standby/normal-off treatment.
+
 ## Known gaps / decisions pending
 
 - Default Electron icon everywhere (taskbar, tray, installer) — needs artwork.
