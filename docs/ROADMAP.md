@@ -308,6 +308,55 @@ typecheck/tests, both are now fixed):
   `v0.0.2` fix, EPS power on/off for real.
 - **Known gap**: no LICENSE file in the package (`companion-module-build`'s license-inventory
   check warns but doesn't fail) — cosmetic, add one before considering publishing.
+  *(Fixed — `companion/LICENSE` added; the tool's own remaining warning is about
+  `@companion-module/base`'s upstream package lacking one, not ours.)*
+
+## Phase 10 — Expromo eXview Edge/AIO driver  ✅
+
+- **`backend/src/drivers/exview.ts`** — the first UDP-based driver in this codebase (every
+  other one is HTTP or TCP). Protocol reverse-engineered from the
+  `exview-aio-driver-wiki`/`expromo-exview-edge-crestron` GitHub repos: UDP port 8600, a
+  fixed 40-byte frame (seven `0x55` sync bytes, a 2-byte command code, 17 bytes of `0xFF`
+  padding, a length-prefixed payload, a trailing checksum = sum of bytes[8..end-1] & 0xFF).
+  The frame builder/parser was validated against all 106 documented command examples before
+  writing a single line against real hardware — 100/106 matched byte-for-byte (the other 6
+  are pre-existing data-entry inconsistencies in the source spreadsheet, none touching the
+  four commands this driver uses).
+- **One device type, two models**: `exview` with `model: "edge" | "aio"` — same protocol,
+  Edge exposes HDMI1-2 as presets, AIO exposes HDMI1-4 (the wire value for HDMI4 is `0x06`,
+  not `0x05` — confirmed both from the spec and from real hardware; `0x05` is simply unused).
+  On/off, brightness, and volume all map onto the existing `ZoneState` shape — `volume` is a
+  new field there (and on `PresetAction`), everything else (brightness, presets, `on`)
+  already existed and just needed a new device type to use them together on one zone, which
+  no existing driver had done before.
+- **On/off deliberately maps to the protocol's quick "Sleep/Wake" toggle (0xC003), not the
+  deep Standby/Restart (0xC007/0xC009)** — the Crestron module's own field notes (real
+  install experience, not just the protocol doc) flag that the deep path reboots the unit
+  into a restricted state that only answers two commands for ~25s, and that volume/
+  brightness/source queries return a fixed error frame while in it, indistinguishable from
+  a real fault. The quick toggle keeps the unit fully pollable and reachable either way,
+  which is what this app's poll-driven status model needs — matches "day-to-day screen
+  on/off", not "unplug it."
+- **A real bug found only on real hardware**: the Power ack (0xC004) turned out to echo the
+  sent byte back (1 byte), not the 2-byte success/failure status word every other Set
+  command's ack uses — the driver originally (wrongly) checked it the same way as the
+  others, so every real power command looked "rejected" even though the device was doing
+  exactly what was asked. Fixed once discovered; the unit test's fake server was also
+  carrying the same wrong assumption and got corrected alongside it.
+- **Verified end-to-end against a real eXview Edge unit**, not just the fake-server unit
+  tests: probe, a full poll cycle, brightness, volume, both HDMI inputs, and power on/off —
+  each confirmed by reading the value back from the device afterward, not just trusting the
+  ack. The device was returned to its exact starting state (on, volume 25, brightness 100,
+  Android source) when finished.
+- Setup wizard: a Model dropdown (Edge/AIO) appears for this device type, same place EPS's
+  independent-output toggle lives.
+- Test suite 136 total (9 new): zones-by-model, real documented TX bytes for volume, power
+  on/off byte selection + ack handling, HDMI recall (including rejecting an input the
+  current model doesn't expose), a full poll cycle from real reply-shaped frames, and probe
+  success/timeout.
+- **Not done**: this new device type isn't wired into the Companion module (Phase 9) or the
+  subnet auto-discovery scan — out of scope for what was asked, straightforward to add later
+  following the same pattern as the other device types in each.
 
 ## Known gaps / decisions pending
 

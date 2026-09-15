@@ -217,6 +217,10 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-si
 .blackout-btn.on { background: #000; border-color: var(--err); color: #fff; }
 .blackout-btn.on .bo-dot { background: var(--err); box-shadow: 0 0 8px var(--err); }
 
+/* a plain power toggle (eXview) — unlike blackout, "on" is the good/expected state */
+.power-btn.on { border-color: var(--ok); }
+.power-btn.on .bo-dot { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+
 .section-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 6px; }
 .presets-section { display: flex; flex-direction: column; }
 .presets { display: flex; flex-wrap: wrap; gap: 8px; }

@@ -6,7 +6,7 @@ import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
 import { zipSync, strToU8 } from "fflate";
 import type {
-  SetBrightnessBody, RecallPresetBody, SetBlackoutBody, SetOnBody, AppPreset, ScheduleEntry,
+  SetBrightnessBody, SetVolumeBody, RecallPresetBody, SetBlackoutBody, SetOnBody, AppPreset, ScheduleEntry,
   SetupDevice, SetupSaveBody, SetupSaveResponse, LoginBody, SetPasswordBody, UpdateStatusBody,
   AppSettingsBody, AppSettingsResponse, UpdateCheckResponse,
 } from "@excontrol/shared";
@@ -70,7 +70,7 @@ export async function buildHttp() {
     reply: any,
     id: string,
     zoneId: string,
-    cap: "setBrightness" | "recallPreset" | "setBlackout" | "setOn",
+    cap: "setBrightness" | "setVolume" | "recallPreset" | "setBlackout" | "setOn",
     arg: number | boolean,
   ) {
     const drv = getDriver(id);
@@ -94,6 +94,15 @@ export async function buildHttp() {
       const pct = Number(req.body?.brightness);
       if (!Number.isFinite(pct) || pct < 0 || pct > 100) return reply.code(400).send({ error: "brightness must be 0..100" });
       return zoneOp(reply, req.params.id, req.params.zoneId, "setBrightness", pct);
+    },
+  );
+  app.post<{ Params: { id: string; zoneId: string }; Body: SetVolumeBody }>(
+    "/api/devices/:id/zones/:zoneId/volume",
+    { preHandler: requireAuth },
+    (req, reply) => {
+      const pct = Number(req.body?.volume);
+      if (!Number.isFinite(pct) || pct < 0 || pct > 100) return reply.code(400).send({ error: "volume must be 0..100" });
+      return zoneOp(reply, req.params.id, req.params.zoneId, "setVolume", pct);
     },
   );
   app.post<{ Params: { id: string; zoneId: string }; Body: RecallPresetBody }>(

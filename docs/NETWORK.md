@@ -36,6 +36,7 @@ anywhere else — no analytics, no telemetry, no third-party trackers.
 | Each configured **NovaStar COEX** (MX40 Pro, etc.) | HTTP, TCP (default **8001**) | Same as above | Same, COEX's own API. |
 | Each configured **Expromo EPS** | Plain TCP (default **5000**) | Same as above | `POWER_STATUS`/`POWER_ON`/`POWER_OFF`/`OUTx_ON`/`OUTx_OFF` — polling status and issuing power/relay commands. |
 | Each configured **OBS Studio** instance | WebSocket, TCP (default **4455**) | Continuously (persistent connection) + on every scene/action | obs-websocket protocol: scene list, current scene, recall a scene. |
+| Each configured **Expromo eXview Edge/AIO** | UDP (default **8600**) | Same as above (poll interval, default 5s) + on every control action | Query/set power, brightness, volume, HDMI input. |
 | `api.github.com`, `github.com`, `objects.githubusercontent.com` | HTTPS (443) | On launch (a few seconds after boot) and when the operator clicks "Check for updates" | electron-updater checking/downloading eXcontrol releases from the public [`daveleo/excontrol`](https://github.com/daveleo/excontrol) GitHub repo. No account, no token, no data about the install is sent — it's an anonymous "is there a newer tagged release" HTTPS GET. Nothing downloads without the operator clicking **Install now**. |
 
 - All four device connections are configured per-install in the setup wizard — an install

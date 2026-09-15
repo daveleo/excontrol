@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import type { DeviceState, ZoneState, PowerLevel } from "@excontrol/shared";
-import { setBrightness, recallPreset, setBlackout, setOn, runAction } from "../api.js";
+import { setBrightness, setVolume, recallPreset, setBlackout, setOn, runAction } from "../api.js";
 
 const STATUS_LABEL: Record<DeviceState["status"], string> = {
   connecting: "Connecting…",
@@ -11,7 +11,9 @@ const STATUS_LABEL: Record<DeviceState["status"], string> = {
   error: "Error",
 };
 
+/** Blackout is a NovaStar-only concept — an eXview's "off" is its own on/off toggle below. */
 const hasZoneControls = (t: DeviceState["type"]) => t === "novastar-h" || t === "novastar-coex";
+const hasBrightness = (t: DeviceState["type"]) => hasZoneControls(t) || t === "exview";
 
 export function DeviceCard({ device, powerLevel }: { device: DeviceState; powerLevel?: PowerLevel }) {
   const [busy, setBusy] = useState(false);
@@ -35,7 +37,7 @@ export function DeviceCard({ device, powerLevel }: { device: DeviceState; powerL
   const multiZone = device.zones.length > 1;
   const showingLastKnown =
     !controllable &&
-    (device.zones.some((z) => (z.presets?.length ?? 0) > 0 || z.brightness != null || z.blackout != null || z.on != null) ||
+    (device.zones.some((z) => (z.presets?.length ?? 0) > 0 || z.brightness != null || z.volume != null || z.blackout != null || z.on != null) ||
       (isEps && !!device.extra && Object.keys(device.extra).length > 0));
 
   return (
@@ -67,8 +69,10 @@ export function DeviceCard({ device, powerLevel }: { device: DeviceState; powerL
             showLabel={multiZone}
             disabled={busy || !controllable}
             onBrightness={(v) => guard(() => setBrightness(device.id, z.id, v))()}
+            onVolume={(v) => guard(() => setVolume(device.id, z.id, v))()}
             onPreset={(id) => guard(() => recallPreset(device.id, z.id, id))()}
             onBlackout={(on) => guard(() => setBlackout(device.id, z.id, on))()}
+            onOn={(on) => guard(() => setOn(device.id, z.id, on))()}
           />
         ))}
 
@@ -76,7 +80,7 @@ export function DeviceCard({ device, powerLevel }: { device: DeviceState; powerL
         <p className="hint">scene: {String(device.extra.programScene)}</p>
       )}
 
-      {!isEps && hasZoneControls(device.type) && device.zones.every((z) => !z.presets?.length) && controllable && (
+      {!isEps && hasBrightness(device.type) && device.zones.every((z) => !z.presets?.length) && controllable && (
         <p className="hint muted">No presets configured on this device yet.</p>
       )}
 
@@ -91,24 +95,39 @@ function ZoneControls({
   showLabel,
   disabled,
   onBrightness,
+  onVolume,
   onPreset,
   onBlackout,
+  onOn,
 }: {
   zone: ZoneState;
   deviceType: DeviceState["type"];
   showLabel: boolean;
   disabled: boolean;
   onBrightness: (v: number) => void;
+  onVolume: (v: number) => void;
   onPreset: (id: number) => void;
   onBlackout: (on: boolean) => void;
+  onOn: (on: boolean) => void;
 }) {
   const controls = hasZoneControls(deviceType);
   return (
     <div className="zone">
       {showLabel && <div className="zone-label">{zone.label}</div>}
 
-      {controls && (
+      {zone.on != null && (
+        <button className={`blackout-btn power-btn ${zone.on ? "on" : ""}`} disabled={disabled} onClick={() => onOn(!zone.on)}>
+          <span className="bo-dot" />
+          {zone.on ? "On — tap to turn off" : "Off — tap to turn on"}
+        </button>
+      )}
+
+      {hasBrightness(deviceType) && (
         <Brightness value={zone.brightness ?? 0} disabled={disabled} onCommit={onBrightness} />
+      )}
+
+      {zone.volume != null && (
+        <Volume value={zone.volume} disabled={disabled} onCommit={onVolume} />
       )}
 
       {controls && (
@@ -211,14 +230,26 @@ function EpsBody({
   );
 }
 
-function Brightness({
+function Brightness({ value, disabled, onCommit }: { value: number; disabled: boolean; onCommit: (v: number) => void }) {
+  return <PercentSlider label="Brightness" value={value} disabled={disabled} onCommit={onCommit} className="brightness" />;
+}
+
+function Volume({ value, disabled, onCommit }: { value: number; disabled: boolean; onCommit: (v: number) => void }) {
+  return <PercentSlider label="Volume" value={value} disabled={disabled} onCommit={onCommit} className="brightness" />;
+}
+
+function PercentSlider({
+  label,
   value,
   disabled,
   onCommit,
+  className,
 }: {
+  label: string;
   value: number;
   disabled: boolean;
   onCommit: (v: number) => void;
+  className: string;
 }) {
   const [local, setLocal] = useState<number | null>(null);
   const shown = local ?? value;
@@ -236,8 +267,8 @@ function Brightness({
   };
 
   return (
-    <label className="brightness">
-      <span>Brightness</span>
+    <label className={className}>
+      <span>{label}</span>
       <input
         type="range"
         min={0}

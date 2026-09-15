@@ -13,9 +13,10 @@ export interface Driver {
 
   /** Zone-scoped capabilities. Absence => the API returns 400 for that verb. */
   setBrightness?(zoneId: string, pct: number): Promise<void>;
+  setVolume?(zoneId: string, pct: number): Promise<void>;
   recallPreset?(zoneId: string, presetId: number): Promise<void>;
   setBlackout?(zoneId: string, on: boolean): Promise<void>;
-  /** EPS independent output control: a plain on/off relay zone. */
+  /** EPS independent output control (a plain on/off relay zone), or an eXview's own power. */
   setOn?(zoneId: string, on: boolean): Promise<void>;
   /** EPS-style raw actions keyed by name ("power_on" / "power_off" / "status"). */
   action?(name: string): Promise<string>;

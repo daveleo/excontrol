@@ -5,6 +5,7 @@ import { NovastarHDriver } from "../drivers/novastar-h.js";
 import { NovastarCoexDriver } from "../drivers/novastar-mx40.js";
 import { EpsDriver } from "../drivers/eps.js";
 import { ObsDriver } from "../drivers/obs.js";
+import { ExviewDriver } from "../drivers/exview.js";
 import { store } from "./state.js";
 import { bus } from "./bus.js";
 import { recomputePower } from "./power.js";
@@ -17,6 +18,7 @@ function build(cfg: DeviceConfig): Driver {
     case "novastar-coex": return new NovastarCoexDriver(cfg);
     case "expromo-eps": return new EpsDriver(cfg);
     case "obs": return new ObsDriver(cfg);
+    case "exview": return new ExviewDriver(cfg);
   }
 }
 

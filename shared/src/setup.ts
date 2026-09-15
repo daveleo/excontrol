@@ -45,6 +45,8 @@ export interface SetupDevice {
   /** EPS — off by default; the whole-unit Power on/off button is unaffected either way */
   independentOutputs?: boolean;
   outputs?: SetupEpsOutput[];
+  /** eXview — Edge has 2 HDMI inputs, AIO has 4. */
+  model?: "edge" | "aio";
 }
 
 export interface SetupState {

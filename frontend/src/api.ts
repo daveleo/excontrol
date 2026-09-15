@@ -10,6 +10,9 @@ const ZONE = (z?: string) => z || "-"; // "-" => the device's first/only zone
 export const setBrightness = (id: string, zoneId: string | undefined, brightness: number) =>
   post(`/api/devices/${id}/zones/${ZONE(zoneId)}/brightness`, { brightness });
 
+export const setVolume = (id: string, zoneId: string | undefined, volume: number) =>
+  post(`/api/devices/${id}/zones/${ZONE(zoneId)}/volume`, { volume });
+
 export const recallPreset = (id: string, zoneId: string | undefined, presetId: number) =>
   post(`/api/devices/${id}/zones/${ZONE(zoneId)}/preset`, { presetId });
 

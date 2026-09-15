@@ -78,7 +78,13 @@ export interface ObsConfig extends BaseDeviceConfig {
   password: string;
 }
 
-export type DeviceConfig = HConfig | CoexConfig | EpsConfig | ObsConfig;
+export interface ExviewConfig extends BaseDeviceConfig {
+  type: "exview";
+  /** Edge has 2 HDMI inputs, AIO has 4 — same protocol, different input count. */
+  model: "edge" | "aio";
+}
+
+export type DeviceConfig = HConfig | CoexConfig | EpsConfig | ObsConfig | ExviewConfig;
 
 export interface AppConfig {
   app: {
@@ -182,6 +188,7 @@ const DEFAULT_PORTS: Record<DeviceType, number> = {
   "novastar-coex": 8001,
   "expromo-eps": 5000,
   obs: 4455,
+  exview: 8600,
 };
 
 /** Flatten a stored device to the wizard's editing shape, with secrets redacted. */
@@ -207,6 +214,7 @@ function toSetupDevice(d: DeviceConfig): SetupDevice {
     base.outputs = d.outputs ?? [];
   }
   if (d.type === "obs") base.password = d.password ? SECRET_KEPT : "";
+  if (d.type === "exview") base.model = d.model;
   return base;
 }
 
@@ -264,6 +272,8 @@ function fromSetupDevice(input: SetupDevice): DeviceConfig {
       };
     case "obs":
       return { ...common, type: "obs", password: d.password || "" };
+    case "exview":
+      return { ...common, type: "exview", model: d.model === "aio" ? "aio" : "edge" };
   }
 }
 

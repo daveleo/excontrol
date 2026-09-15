@@ -7,12 +7,14 @@ const TYPE_LABEL: Record<DeviceType, string> = {
   "novastar-coex": "NovaStar COEX (MX40 Pro…)",
   "expromo-eps": "Expromo EPS power",
   obs: "OBS Studio",
+  exview: "Expromo eXview Edge/AIO",
 };
 const TYPE_SHORT: Record<DeviceType, string> = {
   "novastar-h": "H-series",
   "novastar-coex": "COEX",
   "expromo-eps": "EPS",
   obs: "OBS",
+  exview: "eXview",
 };
 const HAS_ZONES = (t: DeviceType) => t === "novastar-h" || t === "novastar-coex";
 
@@ -61,7 +63,7 @@ export function SetupWizard({
     });
 
   const freshId = (type: DeviceType, taken: Set<string>) => {
-    const stem = { "novastar-h": "h", "novastar-coex": "coex", "expromo-eps": "eps", obs: "obs" }[type];
+    const stem = { "novastar-h": "h", "novastar-coex": "coex", "expromo-eps": "eps", obs: "obs", exview: "exview" }[type];
     if (!taken.has(stem)) return stem;
     for (let n = 2; ; n++) if (!taken.has(`${stem}-${n}`)) return `${stem}-${n}`;
   };
@@ -81,6 +83,7 @@ export function SetupWizard({
         ...(type === "novastar-coex" ? { zones: [] } : {}),
         ...(type === "expromo-eps" ? { independentOutputs: false, outputs: [] } : {}),
         ...(type === "obs" ? { password: "", host: host || "127.0.0.1" } : {}),
+        ...(type === "exview" ? { model: "edge" as const } : {}),
       };
       return [...ds, d];
     });
@@ -374,6 +377,16 @@ function DeviceForm({
               type="password" value={d.password ?? ""}
               onChange={(e) => onChange({ password: e.target.value })}
             />
+          </label>
+        )}
+
+        {d.type === "exview" && (
+          <label className="field narrow">
+            <span>Model</span>
+            <select value={d.model ?? "edge"} onChange={(e) => onChange({ model: e.target.value as "edge" | "aio" })}>
+              <option value="edge">Edge (2 HDMI inputs)</option>
+              <option value="aio">AIO (4 HDMI inputs)</option>
+            </select>
           </label>
         )}
 

@@ -10,7 +10,7 @@ import type { UpdateInfo } from "./update.js";
 
 /* ---------- devices ---------- */
 
-export type DeviceType = "novastar-h" | "novastar-coex" | "expromo-eps" | "obs";
+export type DeviceType = "novastar-h" | "novastar-coex" | "expromo-eps" | "obs" | "exview";
 
 export type ConnectionStatus =
   | "connecting"
@@ -32,10 +32,11 @@ export interface ZoneState {
   id: string;
   label: string;
   brightness?: number; // 0..100
+  volume?: number; // 0..100 — eXview
   blackout?: boolean;
   presets?: Preset[];
   activePreset?: number;
-  /** a plain on/off zone (EPS relay) rather than a brightness one */
+  /** a plain on/off zone (EPS relay, or an eXview's own power state) rather than a brightness one */
   on?: boolean;
 }
 
@@ -84,12 +85,13 @@ export interface PowerDomain {
 export interface PresetAction {
   /** "<deviceId>" or "<deviceId>:<zoneId>" */
   target: string;
-  brightness?: number; // 0..100 — H/COEX zone
+  brightness?: number; // 0..100 — H/COEX zone, eXview
+  volume?: number;     // 0..100 — eXview
   preset?: number;     // recall this zone's preset id
   blackout?: boolean;  // H/COEX zone
   scene?: string;      // OBS scene name
   power?: "on" | "off"; // EPS device (whole unit)
-  on?: boolean;         // EPS relay zone (independent output control)
+  on?: boolean;         // EPS relay zone (independent output control), or an eXview's power state
 }
 
 export interface AppPreset {
@@ -165,6 +167,7 @@ export type ServerMessage =
 /* ---------- HTTP bodies (client → server) ---------- */
 
 export interface SetBrightnessBody { brightness: number }
+export interface SetVolumeBody { volume: number }
 export interface RecallPresetBody { presetId: number }
 export interface SetBlackoutBody { blackout: boolean }
 export interface SetOnBody { on: boolean }

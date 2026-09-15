@@ -76,6 +76,7 @@ async function runAction(a: PresetAction): Promise<void> {
   const zoneId = zoneRef ?? drv.zones()[0]?.id;
   if (!zoneId) throw new Error(`${deviceId}: no zone to act on`);
   if (typeof a.brightness === "number" && drv.setBrightness) await drv.setBrightness(zoneId, a.brightness);
+  if (typeof a.volume === "number" && drv.setVolume) await drv.setVolume(zoneId, a.volume);
   if (typeof a.preset === "number" && drv.recallPreset) await drv.recallPreset(zoneId, a.preset);
   if (typeof a.blackout === "boolean" && drv.setBlackout) await drv.setBlackout(zoneId, a.blackout);
   if (typeof a.on === "boolean" && drv.setOn) await drv.setOn(zoneId, a.on);

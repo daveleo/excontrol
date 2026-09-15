@@ -6,8 +6,9 @@ A simple, free web control overlay for LED installations. One screen — phone, 
 the control PC — for brightness, presets, blackout, power and OBS scenes, across as many
 controllers as the install has.
 
-Supports **NovaStar H-series** and **COEX** processors, **Expromo EPS** power units, and
-**OBS Studio**. Every device is optional; you can have any number of each.
+Supports **NovaStar H-series** and **COEX** processors, **Expromo EPS** power units,
+**Expromo eXview Edge/AIO** displays, and **OBS Studio**. Every device is optional; you can
+have any number of each.
 
 > **Status: early access.** Download the Windows installer from the
 > [latest release](https://github.com/daveleo/excontrol/releases/latest), or build it
