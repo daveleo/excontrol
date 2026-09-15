@@ -465,6 +465,11 @@ instead, and that path exposed two problems Phase 11 didn't catch:
   afterward (it wasn't in the usual `%ProgramData%\eXcontrol` Electron path — that held an
   older, unrelated instance). Lesson for next time: confirm exactly how a live test process is
   running and where its data lives *before* restarting it, not after.
+- **Follow-up**: real-hardware retest surfaced one more gap — after pressing "On — tap to
+  turn off," the resulting "Blackout — tap to turn on" label is accurate but doesn't warn that
+  the device will auto-escalate into Standby on its own after its configured timeout. Added a
+  muted hint under the power button, shown only while `powerState === "blackout"`: "Screen
+  will go into standby mode after the pre-configured time."
 
 ## Known gaps / decisions pending
 

@@ -136,6 +136,10 @@ function ZoneControls({
         </button>
       )}
 
+      {zone.powerState === "blackout" && (
+        <p className="hint muted">Screen will go into standby mode after the pre-configured time.</p>
+      )}
+
       {hasBrightness(deviceType) && (
         <Brightness value={zone.brightness ?? 0} disabled={disabled} onCommit={onBrightness} />
       )}
