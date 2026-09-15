@@ -1,5 +1,7 @@
 # eXcontrol
 
+**[daveleo.github.io/excontrol](https://daveleo.github.io/excontrol/)** — product page + download link.
+
 A simple, free web control overlay for LED installations. One screen — phone, tablet, or
 the control PC — for brightness, presets, blackout, power and OBS scenes, across as many
 controllers as the install has.
