@@ -51,7 +51,11 @@ export function DeviceCard({ device, powerLevel }: { device: DeviceState; powerL
         <p className="hint muted">Waiting for power. Controls return once this equipment is on.</p>
       )}
       {device.status === "initializing" && (
-        <p className="hint muted">Booting — this can take up to a minute.</p>
+        <p className="hint muted">
+          {device.type === "exview" && device.error
+            ? `${device.error[0]!.toUpperCase()}${device.error.slice(1)}…`
+            : "Booting — this can take up to a minute."}
+        </p>
       )}
       {device.status === "offline" && !isEps && <p className="err">Not responding. {device.error}</p>}
       {showingLastKnown && (

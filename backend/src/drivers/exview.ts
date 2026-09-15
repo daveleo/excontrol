@@ -51,16 +51,31 @@ import { netReason } from "../setup/neterr.js";
  *      even 0xC020 style probes may go unanswered depending on firmware, but this app only
  *      needs to tell "on/blackout" from "standby", not tell the two standby flavors apart).
  *   4. 0xC005 == 0x80 => On. 0xC005 == 0x00 => Blackout.
- *   5. Anything else (e.g. both time out) => Unknown — don't guess.
+ *   5. Both time out with literally no reply at all => Unreachable, not a power state — see
+ *      below. Anything else (a reply that doesn't match any of the above) => Unknown.
  *
  * Volume/brightness/source/HDMI-signal are only queried when state is On or Blackout — in
- * Standby they'd also just come back "Unsupported protocol", so there's nothing to read.
+ * Standby (and Unknown/Unreachable) they'd also just come back stale or "Unsupported
+ * protocol", so they're blanked rather than shown as if live (see clearLiveReadings()).
  *
  * Waking from Standby needs the dedicated 10-byte wake packet (`AA BB CC 01 00 00 01 DD EE
  * FF`, no sync preamble, not a normal framed command, no reply) — the plain 0xC003 wake byte
- * is exactly the "everything else" that gets rejected while restricted. Confirmed against
- * real hardware: full recovery is a two-reboot affair, roughly 70s wall-clock from a direct
+ * is exactly the "everything else" that gets rejected while restricted. Confirmed against real
+ * hardware: full recovery is a two-reboot affair, roughly 30-70s wall-clock from a direct
  * 0xC007 to fully "On" again.
+ *
+ * ---- "Unreachable" during a Standby-entry or wake-from-Standby reboot is expected, not a fault ----
+ *
+ * A captured real auto-timeout transition (Blackout -> the device's own configured delay ->
+ * auto-escalation into Standby) showed a ~20s stretch where *every* query — 0xC020 and 0xC005
+ * included — got no reply at all, before the unit came back up answering "Unsupported
+ * protocol" as a settled Standby. Waking from Standby is the same shape, just longer (up to
+ * ~70s, per prior direct-0xC007 testing). Reporting that stretch as a bare connectivity fault
+ * ("offline") is technically true but not useful — poll() instead treats total unreachability
+ * as *expected* (and reports it via BaseDriver.initializing(), not offline()) whenever it
+ * follows a Blackout, a Standby, or our own wake-packet send, for up to UNREACHABLE_GRACE_MS;
+ * past that, or with no such reason to expect it, it's reported as a genuine fault like any
+ * other driver's.
  */
 
 const CODE = {
@@ -150,11 +165,25 @@ function ackOk(data: number[]): boolean {
 
 type PowerState = "on" | "blackout" | "standby" | "unknown";
 
+/** How long a total, no-reply-at-all unreachable spell is tolerated as an *expected* part of
+ *  a Standby-entry or wake-from-Standby reboot before it's treated as a genuine fault. Real
+ *  hardware observed: ~20s auto-escalating into Standby, up to ~70s waking from it. */
+const UNREACHABLE_GRACE_MS = 90_000;
+
 export class ExviewDriver extends BaseDriver {
   private readonly c: ExviewConfig;
-  /** Updated on every poll; consulted by setOn() to pick the right wake mechanism — the
-   *  plain wake byte only works from Blackout, Standby needs the dedicated wake packet. */
+  /** Updated whenever a definite state resolves; consulted by setOn() to pick the right wake
+   *  mechanism (the plain wake byte only works from Blackout, Standby needs the dedicated wake
+   *  packet) and by poll() to judge whether a current total-unreachable spell is expected. */
   private lastPowerState: PowerState = "unknown";
+  /** First Date.now() a poll found the unit totally unreachable, in the current unbroken
+   *  streak; null once it answers again. Lets poll() tell "still within the expected reboot
+   *  window" from "this has gone on too long to be that". */
+  private unreachableSince: number | null = null;
+  /** Set right before sending the Standby wake packet, cleared once any definite state
+   *  resolves again — distinguishes "unreachable because we just told it to reboot" from
+   *  "unreachable because a prolonged Blackout is auto-escalating into Standby on its own". */
+  private awaitingWake = false;
 
   constructor(cfg: ExviewConfig) {
     super(cfg);
@@ -184,7 +213,7 @@ export class ExviewDriver extends BaseDriver {
 
   /** See this file's header comment for the full derivation. Queries 0xC020 and 0xC005
    *  together and combines them — neither alone can reliably tell Blackout from Standby. */
-  private async resolvePowerState(): Promise<{ state: PowerState; sleepWake?: ParsedReply }> {
+  private async resolvePowerState(): Promise<{ state: PowerState | "unreachable"; sleepWake?: ParsedReply }> {
     const [standbySettled, sleepWakeSettled] = await Promise.allSettled([
       this.send(CODE.QUERY_TRUE_STANDBY, []),
       this.send(CODE.QUERY_SCREEN_STATUS, []),
@@ -192,10 +221,11 @@ export class ExviewDriver extends BaseDriver {
     const standby = standbySettled.status === "fulfilled" ? standbySettled.value : null;
     const sleepWake = sleepWakeSettled.status === "fulfilled" ? sleepWakeSettled.value : null;
 
-    // Neither probe got any reply at all — genuinely unreachable, not a power state to
-    // report. Throw so the usual startPolling -> offline() path handles it like every other
-    // driver's connectivity failure, rather than this becoming a fourth silent "unknown".
-    if (standby == null && sleepWake == null) throw new Error("eXview: no reply to either power-state probe");
+    // Neither probe got any reply at all. Confirmed against real hardware (auto-standby-probe
+    // capture): this is exactly what a Standby-entry or wake-from-Standby reboot looks like for
+    // ~20-70s, not just a fault — so it's reported as its own state and poll() decides, with the
+    // benefit of history poll() alone has, whether that's expected or a genuine connectivity loss.
+    if (standby == null && sleepWake == null) return { state: "unreachable" };
 
     const isUnsupported = (r: ParsedReply | null) => r?.code === UNSUPPORTED_PROTOCOL_CODE;
     if (isUnsupported(standby) || isUnsupported(sleepWake)) return { state: "standby" };
@@ -205,15 +235,50 @@ export class ExviewDriver extends BaseDriver {
     return { state: "unknown" }; // got a reply, but not one that maps to anything known
   }
 
+  /** Blank out everything that can't actually be read while Standby/unreachable/unknown —
+   *  showing yesterday's HDMI-signal or source reading as if it were live is exactly the "not
+   *  best practice" the user called out; better to show nothing than a stale-but-plausible
+   *  value. presets is reset to the bare list (no signal info) so the section still renders,
+   *  just without any dot claiming to know what's plugged in right now. */
+  private clearLiveReadings(): void {
+    this.patchZone(ZONE, {
+      volume: undefined,
+      brightness: undefined,
+      activePreset: undefined,
+      presets: this.presetList(),
+    });
+  }
+
   private async poll(): Promise<void> {
     const { state } = await this.resolvePowerState();
+
+    if (state === "unreachable") {
+      const now = Date.now();
+      if (this.unreachableSince == null) this.unreachableSince = now;
+      const elapsed = now - this.unreachableSince;
+      const expectingTransition =
+        this.awaitingWake || this.lastPowerState === "blackout" || this.lastPowerState === "standby";
+
+      if (expectingTransition && elapsed < UNREACHABLE_GRACE_MS) {
+        this.clearLiveReadings();
+        const waking = this.awaitingWake || this.lastPowerState === "standby";
+        this.initializing(waking ? "waking up from standby" : "switching to standby");
+        return;
+      }
+      // Either not mid-transition, or it's gone on far longer than a real reboot ever takes —
+      // a genuine fault, not a state. Let the usual startPolling -> offline() path handle it.
+      throw new Error("eXview: no reply to either power-state probe");
+    }
+
+    this.unreachableSince = null;
+    this.awaitingWake = false;
     this.lastPowerState = state;
 
     if (state === "standby" || state === "unknown") {
       // Nothing else is worth asking — Standby answers every other query with the same
       // "Unsupported protocol" text, and a genuinely Unknown state means we can't trust a
-      // fresh read either way. Keep whatever brightness/volume/source were last known
-      // (BaseDriver/Store already do this across a real disconnect) rather than blanking them.
+      // fresh read either way.
+      this.clearLiveReadings();
       this.patchZone(ZONE, { on: false, powerState: state === "standby" ? "standby" : undefined });
       this.online();
       return;
@@ -251,7 +316,9 @@ export class ExviewDriver extends BaseDriver {
       // A Standby-restricted unit rejects the plain wake byte along with everything else —
       // only the dedicated wake packet works, and it sends no reply. Recovery is a two-reboot
       // affair (~70s), so this can't confirm success synchronously; the next poll(s) will
-      // pick up the real state once the unit comes back.
+      // pick up the real state once the unit comes back. Flag it so poll() reports "waking
+      // up" instead of "offline" for the unreachable stretch that reboot causes.
+      this.awaitingWake = true;
       await this.sendRaw(WAKE_PACKET);
       return;
     }
@@ -292,7 +359,8 @@ export class ExviewDriver extends BaseDriver {
     const hp = `${this.c.host}:${this.c.port}`;
     try {
       const { state } = await this.resolvePowerState();
-      if (state === "unknown") return { ok: false, hint: "unreachable", detail: `No usable reply from ${hp}.` };
+      if (state === "unreachable" || state === "unknown")
+        return { ok: false, hint: "unreachable", detail: `No usable reply from ${hp}.` };
       const label = state === "on" ? "on" : state === "blackout" ? "blacked out" : "in standby";
       return {
         ok: true,

@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { createSocket, type Socket } from "node:dgram";
 import { ExviewDriver } from "./exview.js";
 import type { ExviewConfig } from "../config.js";
+import { bus, type DevicePatch } from "../core/bus.js";
 
 /**
  * A fake eXview unit. Decodes the real frame shape (see exview.ts's own header comment) and
@@ -110,8 +111,8 @@ function buildReply(reqCode: string, data: number[], state: FakeState): Buffer |
 const sockets: Socket[] = [];
 afterEach(() => { for (const s of sockets.splice(0)) s.close(); });
 
-const cfg = (port: number, model: "edge" | "aio" = "edge"): ExviewConfig => ({
-  id: "screen1", type: "exview", label: "Living room eXview", enabled: true, host: "127.0.0.1", port, model,
+const cfg = (port: number, model: "edge" | "aio" = "edge", id = "screen1"): ExviewConfig => ({
+  id, type: "exview", label: "Living room eXview", enabled: true, host: "127.0.0.1", port, model,
 });
 
 const state = (over: Partial<FakeState> = {}): FakeState => ({
@@ -314,6 +315,111 @@ describe("eXview driver — On / Blackout / Standby resolution", () => {
     expect(received).toEqual(["C003"]);
     expect(drv.zones()[0]?.powerState).toBe("blackout");
   });
+
+  it("standby/unknown readings never show stale volume/brightness/source/signal as if live", async () => {
+    // Poll once while On (populates volume/brightness/activePreset/hasSignal with real
+    // values), then flip the fake into Active Standby and poll again — the previously-read
+    // values must be cleared, not left looking current, once the unit can no longer confirm them.
+    const fake = await fakeExview(state({ on: true, volume: 42, brightness: 77, source: 2, hdmiSignal: [1, 0, 0, 0] }));
+    sockets.push(fake.sock);
+    const drv = new ExviewDriver({ ...cfg(fake.port), pollMs: 150 });
+    await drv.start();
+    await settle();
+    expect(drv.zones()[0]?.volume).toBe(42);
+    expect(drv.zones()[0]?.activePreset).toBe(2);
+    expect(drv.zones()[0]?.presets?.find((p) => p.name === "HDMI 1")?.hasSignal).toBe(true);
+
+    fake.state.standby = "active";
+    await new Promise((r) => setTimeout(r, 400)); // let a subsequent poll (pollMs: 150) land
+    expect(drv.zones()[0]?.powerState).toBe("standby");
+    expect(drv.zones()[0]?.volume).toBeUndefined();
+    expect(drv.zones()[0]?.brightness).toBeUndefined();
+    expect(drv.zones()[0]?.activePreset).toBeUndefined();
+    expect(drv.zones()[0]?.presets?.every((p) => p.hasSignal == null)).toBe(true);
+    await drv.stop();
+  });
+});
+
+describe("eXview driver — expected-transition unreachability", () => {
+  it("a total-timeout right after Blackout reports 'initializing' (switching to standby), not offline", async () => {
+    const id = "screen-blackout-timeout";
+    const { port, sock } = await fakeExview(state({ on: false }));
+    sockets.push(sock);
+    const drv = new ExviewDriver({ ...cfg(port, "edge", id), pollMs: 500 });
+    const patches: DevicePatch[] = [];
+    const onPatch = (p: DevicePatch) => { if (p.id === id) patches.push(p); };
+    bus.on("device:patch", onPatch);
+    try {
+      await drv.start();
+      await settle(); // first (immediate) poll establishes lastPowerState = "blackout"
+      expect(drv.zones()[0]?.powerState).toBe("blackout");
+
+      patches.length = 0;
+      sock.removeAllListeners("message"); // simulate the reboot's total-unreachable window
+      // A subsequent poll must start (pollMs: 500) and its sends genuinely time out (3000ms
+      // per send) before it reports anything — allow well past that.
+      await new Promise((r) => setTimeout(r, 4200));
+
+      const statuses = patches.map((p) => p.status).filter(Boolean);
+      expect(statuses).toContain("initializing");
+      expect(statuses).not.toContain("offline");
+      const initPatch = patches.find((p) => p.status === "initializing");
+      expect(initPatch?.error).toMatch(/standby/);
+    } finally {
+      bus.off("device:patch", onPatch);
+      await drv.stop();
+    }
+  }, 10000);
+
+  it("setOn(true) from Standby, then total silence for the reboot window, reports 'waking up', not offline", async () => {
+    const id = "screen-wake-timeout";
+    const { port, sock } = await fakeExview(state({ standby: "eco" }));
+    sockets.push(sock);
+    const drv = new ExviewDriver({ ...cfg(port, "edge", id), pollMs: 500 });
+    const patches: DevicePatch[] = [];
+    const onPatch = (p: DevicePatch) => { if (p.id === id) patches.push(p); };
+    bus.on("device:patch", onPatch);
+    try {
+      await drv.start();
+      await new Promise((r) => setTimeout(r, 3300)); // let the first poll genuinely resolve to "standby"
+      expect(drv.zones()[0]?.powerState).toBe("standby");
+
+      patches.length = 0;
+      sock.removeAllListeners("message"); // WAKE_PACKET now also gets no reply (matches real hardware)
+      await drv.setOn("screen", true);
+      await new Promise((r) => setTimeout(r, 4200)); // a subsequent poll's sends time out, still within grace
+
+      const statuses = patches.map((p) => p.status).filter(Boolean);
+      expect(statuses).toContain("initializing");
+      expect(statuses).not.toContain("offline");
+      const initPatch = patches.find((p) => p.status === "initializing");
+      expect(initPatch?.error).toMatch(/waking/);
+    } finally {
+      bus.off("device:patch", onPatch);
+      await drv.stop();
+    }
+  }, 15000);
+
+  it("unreachability with no prior blackout/standby/wake context is reported as a genuine fault immediately", async () => {
+    const id = "screen-no-context";
+    const { port, sock } = await fakeExview(state());
+    sockets.push(sock);
+    sock.removeAllListeners("message");
+    const drv = new ExviewDriver(cfg(port, "edge", id));
+    const patches: DevicePatch[] = [];
+    const onPatch = (p: DevicePatch) => { if (p.id === id) patches.push(p); };
+    bus.on("device:patch", onPatch);
+    try {
+      await drv.start();
+      await new Promise((r) => setTimeout(r, 3300));
+      const statuses = patches.map((p) => p.status).filter(Boolean);
+      expect(statuses).not.toContain("initializing");
+      expect(statuses).toContain("offline");
+    } finally {
+      bus.off("device:patch", onPatch);
+      await drv.stop();
+    }
+  }, 10000);
 });
 
 describe("eXview driver — probe", () => {

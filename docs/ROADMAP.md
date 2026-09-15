@@ -417,6 +417,55 @@ typecheck/tests, both are now fixed):
   reads backwards for a plain "screen is on" state in light mode especially — now a
   theme-aware green-on/amber-standby/normal-off treatment.
 
+## Phase 12 — eXview: real-hardware auto-timeout capture, stale-reading fix, and smart transition messaging  ✅
+
+Phase 11 verified the On/Blackout/Standby model against a **direct `0xC007`-triggered**
+Standby entry only. Real usage goes through Blackout's own **device-configured auto-timeout**
+instead, and that path exposed two problems Phase 11 didn't catch:
+
+- **Real hardware capture**: a 7-minute scripted probe (Blackout, then all six relevant
+  queries every 20s) against the user's live unit caught the actual auto-escalation in the
+  act — a ~20s stretch where *every* query, `0xC020`/`0xC005` included, got no reply
+  whatsoever, immediately followed by the unit settling into the same `"Unsupported protocol"`
+  Standby signature Phase 11 already knew about. (Also notable, though not something the
+  driver needs to act on: the user's unit escalated after roughly 2.5 minutes of this run, not
+  the ~5 minutes previously described — device-side timers apparently aren't exactly fixed.)
+- **Bug: stale volume/brightness/source/signal shown as if live during Standby.** Phase 11's
+  `poll()` deliberately left these fields untouched while Standby/Unknown, reasoning that
+  "keep the last known value" was the friendlier default (same convention `BaseDriver` uses
+  across a real disconnect). Live-hardware testing showed this was wrong for this specific
+  case: a screen that's been in Standby for hours still shows whatever HDMI input last had a
+  cable plugged in, looking exactly as live and current as real data. **Fixed**: entering
+  Standby (or the rarer Unknown case) now explicitly blanks `volume`, `brightness`,
+  `activePreset`, and every preset's `hasSignal`, via a new `clearLiveReadings()` — the section
+  still renders (so the source list doesn't disappear), just without any dot or value claiming
+  to know something it can't.
+- **Bug: the ~20-70s unreachable reboot window reported a bare "Offline" fault.** Technically
+  true (nothing replies), but not useful — the user wants to see "switching to standby" or
+  "waking up" for a stretch of unreachability that's an *expected part of a transition already
+  underway*, distinct from an actual connectivity fault. `resolvePowerState()` now returns an
+  `"unreachable"` state instead of throwing; `poll()` tracks `unreachableSince` and an
+  `awaitingWake` flag (set the moment `setOn(true)` sends the Standby wake packet) and reports
+  via `BaseDriver.initializing()` — "waking up from standby" or "switching to standby" —
+  whenever the current unreachable stretch follows a Blackout, a Standby, or our own wake
+  attempt, for up to 90s (comfortably past the ~70s worst case seen on real hardware).
+  Unreachability with no such preceding context — or one that's gone on far longer than any
+  real reboot takes — still reports as a genuine fault (`offline()`), same as any other driver.
+  The frontend surfaces the specific note (capitalized) instead of the generic "Booting…" text,
+  scoped to `device.type === "exview"` only so no other driver's raw connectivity-error
+  messages start leaking into their own generic initializing text.
+- Added 4 new tests to `exview.test.ts` (25 total): stale-reading clearing, the
+  Blackout-then-total-timeout "switching to standby" path, the wake-then-total-timeout "waking
+  up" path, and a control case confirming a first-ever, context-less unreachable spell still
+  reports as a genuine fault immediately (not swallowed into "initializing" indefinitely).
+- **Operational note, not a code lesson**: mid-fix, the live test instance running on the
+  user's PC turned out to be a plain `node backend/dist/cli.js` process, not the installed
+  Electron app — restarting it to pick up the fix without first confirming that killed the
+  user's in-progress session, and its config/data directory couldn't be reconstructed
+  afterward (it wasn't in the usual `%ProgramData%\eXcontrol` Electron path — that held an
+  older, unrelated instance). Lesson for next time: confirm exactly how a live test process is
+  running and where its data lives *before* restarting it, not after.
+
 ## Known gaps / decisions pending
 
 - Default Electron icon everywhere (taskbar, tray, installer) — needs artwork.
