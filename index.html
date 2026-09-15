@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>eXcontrol — control overlay for LED installations</title>
+<meta name="description" content="A free, simple web control overlay for LED installations — NovaStar H-series/COEX, Expromo EPS power, and OBS Studio, from one screen.">
+<style>
+  :root{
+    --bg:#0b0e14; --bg-2:#11151d; --panel:#141924; --panel-2:#1a2130;
+    --line:#232b3a; --text:#e7ecf5; --muted:#8b96ac; --accent:#4f8cff;
+    --accent-2:#7db2ff; --ok:#3ecf8e; --warn:#e0a63e;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:radial-gradient(1200px 600px at 50% -10%, #16213a 0%, var(--bg) 60%);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.55;
+    padding-inline:20px;
+  }
+  a{color:var(--accent-2)}
+  .wrap{max-width:960px;margin:0 auto}
+
+  header.hero{padding-block:72px 40px; text-align:center}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--ok);
+       box-shadow:0 0 10px var(--ok); margin-right:8px; vertical-align:2px}
+  .brand{font-size:15px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:600}
+  h1{font-size:clamp(32px,6vw,52px); margin:18px 0 12px; letter-spacing:-0.02em}
+  h1 .x{color:var(--accent-2)}
+  .tagline{font-size:clamp(16px,2.4vw,20px); color:var(--muted); max-width:640px; margin:0 auto 34px}
+
+  .cta-row{display:flex; gap:14px; justify-content:center; flex-wrap:wrap; margin-bottom:14px}
+  .btn{
+    display:inline-flex; align-items:center; gap:10px; padding:14px 24px; border-radius:12px;
+    font-size:16px; font-weight:600; text-decoration:none; border:1px solid transparent;
+    transition:transform .12s ease, background .15s ease;
+  }
+  .btn:hover{transform:translateY(-1px)}
+  .btn-primary{background:linear-gradient(180deg, var(--accent-2), var(--accent)); color:#fff;
+    box-shadow:0 8px 24px -8px rgba(79,140,255,.55)}
+  .btn-secondary{background:var(--panel-2); color:var(--text); border-color:var(--line)}
+  .btn small{display:block; font-weight:400; font-size:12px; opacity:.85; margin-top:2px}
+  .fineprint{color:var(--muted); font-size:13px; margin-top:6px}
+  .fineprint code{background:var(--panel-2); padding:1px 6px; border-radius:5px; font-size:12px}
+
+  section{padding-block:40px}
+  .section-title{font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted);
+    font-weight:700; margin-bottom:18px; text-align:center}
+
+  .grid{display:grid; grid-template-columns:repeat(3,1fr); gap:16px}
+  @media (max-width:760px){ .grid{grid-template-columns:repeat(2,1fr)} }
+  @media (max-width:520px){ .grid{grid-template-columns:1fr} }
+  .card{
+    background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:20px;
+  }
+  .card h3{margin:0 0 8px; font-size:16px}
+  .card p{margin:0; color:var(--muted); font-size:14px}
+
+  .hw{display:flex; flex-wrap:wrap; gap:10px; justify-content:center}
+  .chip{background:var(--panel-2); border:1px solid var(--line); border-radius:999px;
+    padding:8px 16px; font-size:14px; color:var(--text)}
+
+  .split{display:grid; grid-template-columns:1.1fr .9fr; gap:28px; align-items:start}
+  @media (max-width:760px){ .split{grid-template-columns:1fr} }
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:26px}
+  .panel h2{margin-top:0; font-size:20px}
+  .panel p{color:var(--muted)}
+  .panel ul{color:var(--muted); padding-left:20px; margin:12px 0}
+  .panel li{margin-bottom:6px}
+
+  .links{display:flex; flex-wrap:wrap; gap:10px}
+  .links a{
+    background:var(--panel-2); border:1px solid var(--line); border-radius:10px;
+    padding:10px 14px; font-size:14px; text-decoration:none; color:var(--text);
+  }
+  .links a:hover{border-color:var(--accent)}
+
+  footer{padding-block:50px 70px; text-align:center; color:var(--muted); font-size:13px; border-top:1px solid var(--line); margin-top:20px}
+  footer a{color:var(--muted); text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="brand"><span class="dot"></span>eXcontrol</div>
+    <h1>Control the room from <span class="x">one screen</span></h1>
+    <p class="tagline">
+      A free, open-source web control overlay for LED installations — brightness, presets,
+      blackout, power and OBS scenes, from a phone, tablet, or the control PC.
+    </p>
+
+    <div class="cta-row">
+      <a id="download-btn" class="btn btn-primary" href="https://github.com/daveleo/excontrol/releases/latest">
+        <span>⬇</span>
+        <span>
+          Download for Windows
+          <small id="download-sub">Latest release</small>
+        </span>
+      </a>
+      <a class="btn btn-secondary" href="https://github.com/daveleo/excontrol">
+        View on GitHub
+      </a>
+    </div>
+    <p class="fineprint">Free · MIT licensed · unsigned build, so Windows SmartScreen shows a warning on first run — click <code>More info → Run anyway</code>.</p>
+  </header>
+
+  <section>
+    <div class="section-title">Supported hardware</div>
+    <div class="hw">
+      <span class="chip">NovaStar H-series</span>
+      <span class="chip">NovaStar COEX</span>
+      <span class="chip">Expromo EPS</span>
+      <span class="chip">OBS Studio</span>
+      <span class="chip">Bitfocus Companion</span>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-title">What it does</div>
+    <div class="grid">
+      <div class="card">
+        <h3>Per-screen control</h3>
+        <p>Brightness, presets and blackout for every screen on every controller, from a slider and a couple of taps.</p>
+      </div>
+      <div class="card">
+        <h3>Power</h3>
+        <p>On/off per power unit with plain-language status, plus optional independent control of up to 6 named relays.</p>
+      </div>
+      <div class="card">
+        <h3>Presets</h3>
+        <p>Save a whole look — brightness, presets, blackout, OBS scene — across every device, and recall it in one tap.</p>
+      </div>
+      <div class="card">
+        <h3>Scheduler</h3>
+        <p>Power on/off or apply a preset on a daily or weekly schedule, with a shutdown countdown you can extend.</p>
+      </div>
+      <div class="card">
+        <h3>Live, everywhere</h3>
+        <p>Every open screen reflects the same state within seconds — no refresh, no "did that actually work?"</p>
+      </div>
+      <div class="card">
+        <h3>Locked down if you want it</h3>
+        <p>An optional shared password gates the entire panel — nobody without it sees so much as read-only state.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="split">
+      <div class="panel">
+        <h2>Built for the AV network, not the internet</h2>
+        <p>
+          eXcontrol assumes a dedicated, trusted LAN — the same assumption almost every
+          product in this category makes. Plain HTTP, no accounts to manage, one shared
+          password if you want a lock on the door.
+        </p>
+        <ul>
+          <li>Full inbound/outbound port breakdown for IT reviews</li>
+          <li>An honest security write-up — what's protected, what isn't, and why</li>
+          <li>Self-updating from public GitHub Releases, never a silent install</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h2>Get it</h2>
+        <div class="links">
+          <a href="https://github.com/daveleo/excontrol/releases/latest">Latest release</a>
+          <a href="https://github.com/daveleo/excontrol#readme">Read the docs</a>
+          <a href="https://github.com/daveleo/excontrol/blob/main/docs/SECURITY.md">Security posture</a>
+          <a href="https://github.com/daveleo/excontrol/blob/main/docs/NETWORK.md">Network requirements</a>
+          <a href="https://github.com/daveleo/excontrol/blob/main/docs/COMPANION.md">Companion integration</a>
+          <a href="https://github.com/daveleo/excontrol/issues">Report an issue</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>eXcontrol is free and open source under the MIT license.</p>
+    <p><a href="https://github.com/daveleo/excontrol">github.com/daveleo/excontrol</a></p>
+  </footer>
+
+</div>
+
+<script>
+(async function () {
+  const btn = document.getElementById('download-btn');
+  const sub = document.getElementById('download-sub');
+  try {
+    const res = await fetch('https://api.github.com/repos/daveleo/excontrol/releases/latest');
+    if (!res.ok) return;
+    const data = await res.json();
+    const asset = (data.assets || []).find(a => a.name && a.name.endsWith('.exe'));
+    if (asset) {
+      btn.href = asset.browser_download_url;
+      sub.textContent = (data.tag_name || 'Latest') + ' for Windows';
+    }
+  } catch (e) {
+    // keep the fallback link to the releases page
+  }
+})();
+</script>
+
+</body>
+</html>
