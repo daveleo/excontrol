@@ -103,17 +103,24 @@ export function resolveTargets(
 }
 
 /** Pure. Desired state per relay (index 0 = OUT1; undefined = leave alone) for one EPS,
- *  plus which Off devices have to stay powered because someone else needs their relay. */
+ *  plus which Off devices have to stay powered because someone else needs their relay.
+ *  `unassigned` is Everything's target: relays no device depends on (cabinets, lights, a
+ *  spare unit) follow Everything and nothing else — a group only ever touches the relays its
+ *  own members need. */
 export function planEpsOutputs(
   members: Dev[],
   targetOf: (id: string) => PowerTarget | undefined,
   protectedOutputs: Set<number> = new Set(),
+  unassigned?: PowerTarget,
 ): { desired: (boolean | undefined)[]; heldOn: Map<string, string[]> } {
   const { claimed, whole, rest } = outputOwnership(members);
   const desired: (boolean | undefined)[] = Array(6).fill(undefined);
   const wants = (t: PowerTarget | undefined) => (t === undefined ? undefined : t !== "off");
   for (const [idx, id] of claimed) desired[idx - 1] = wants(targetOf(id));
   const heldOn = new Map<string, string[]>();
+  if (!whole.length && unassigned) {
+    for (const i of rest) desired[i - 1] = unassigned !== "off";
+  }
   if (whole.length) {
     const ts = whole.map((id) => targetOf(id));
     const anyOn = ts.some((t) => t !== undefined && t !== "off");
@@ -224,7 +231,7 @@ function heldMap(res: Map<string, Resolved>): Map<string, string[]> {
   const held = new Map<string, string[]>();
   for (const eps of devices.filter((d) => d.type === "expromo-eps")) {
     const members = devices.filter((d) => d.poweredBy === eps.id);
-    const { heldOn } = planEpsOutputs(members, (id) => res.get(id)?.target);
+    const { heldOn } = planEpsOutputs(members, (id) => res.get(id)?.target, new Set(), targets.get(ALL_GROUP)?.target);
     for (const [k, v] of heldOn) held.set(k, v);
   }
   return held;
@@ -410,7 +417,7 @@ async function reconcile(gen: number): Promise<void> {
     for (const e of epsCfgs) {
       const members = devices.filter((d) => d.poweredBy === e.id);
       const prot = new Set((e.type === "expromo-eps" ? e.outputs ?? [] : []).filter((o) => o.protected).map((o) => o.index));
-      plans.set(e.id, planEpsOutputs(members, targetOf, prot));
+      plans.set(e.id, planEpsOutputs(members, targetOf, prot, targets.get(ALL_GROUP)?.target));
     }
     const onUnit = (epsId: string) => devices.filter((d) => d.poweredBy === epsId).map((d) => d.id);
     const held = new Set<string>();

@@ -89,6 +89,14 @@ describe("planEpsOutputs — which relays go where", () => {
     expect(planEpsOutputs(members, t({})).desired).toEqual(Array(6).fill(undefined));
   });
 
+  it("relays no device depends on follow Everything only (a spare unit, passive loads)", () => {
+    const onlyExv = [dev("exv", "exview", { poweredBy: "eps", poweredByOutput: 3 })];
+    expect(planEpsOutputs(onlyExv, t({ exv: "on" })).desired).toEqual([undefined, undefined, true, undefined, undefined, undefined]);
+    expect(planEpsOutputs(onlyExv, t({ exv: "off" }), new Set(), "off").desired).toEqual(Array(6).fill(false));
+    expect(planEpsOutputs([], t({}), new Set([2]), "on").desired).toEqual([true, true, true, true, true, true]);
+    expect(planEpsOutputs([], t({}), new Set([2]), "off").desired).toEqual([false, undefined, false, false, false, false]);
+  });
+
   it("protected relays are never planned off", () => {
     const p = planEpsOutputs(members, t({ h9: "off", coex: "off" }), new Set([5]));
     expect(p.desired[4]).toBeUndefined();
@@ -190,6 +198,18 @@ describe("power engine, end to end", () => {
     expect(seq[0]).toBe("exv2 power standby");
     expect(seq).toContain("eps outputs 000000");
     expect(seq.indexOf("exv2 power standby")).toBeLessThan(seq.indexOf("eps outputs 000000"));
+  });
+
+  it("Everything → Off also switches off an EPS with no devices on it; a group never does", async () => {
+    getConfig().devices.push({ id: "spare", type: "expromo-eps", label: "Spare", enabled: true, host: "x", port: 1 });
+    store.init([...store.all(), dev("spare", "expromo-eps", { extra: { system: "ON", outputs: "111111" } })]);
+    _setDriverForTest(fakeEps("spare", "111111"));
+    await setGroupTarget("wall", "off", "test");
+    await _whenIdle();
+    expect(calls.some((c) => c.dev === "spare")).toBe(false);
+    await setGroupTarget("all", "off", "test");
+    await _whenIdle();
+    expect(calls.find((c) => c.dev === "spare")?.what).toBe("outputs 000000");
   });
 
   it("Everything → On: units are chained with a gap (one inrush at a time), then screens woken", async () => {
