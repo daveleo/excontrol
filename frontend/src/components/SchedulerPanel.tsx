@@ -16,6 +16,7 @@ export function SchedulerPanel({ state, onClose }: { state: AppState; onClose: (
   const [saved, setSaved] = useState(false);
 
   const epsIds = state.devices.filter((d) => d.type === "expromo-eps").map((d) => d.id);
+  const groups = (state.groups ?? []).filter((g) => g.id !== "all");
 
   const patch = (i: number, p: Partial<ScheduleEntry>) =>
     setEntries((es) => es.map((e, idx) => (idx === i ? { ...e, ...p } : e)));
@@ -41,7 +42,10 @@ export function SchedulerPanel({ state, onClose }: { state: AppState; onClose: (
 
   return (
     <Modal title="Scheduler" onClose={onClose}>
-      <p className="modal-lead">Automatically power on/off, or apply a preset, at a set time.</p>
+      <p className="modal-lead">
+        Switch Everything, a power group, or a single EPS On / Standby / Off — or apply a preset —
+        at a set time. Each entry acts only on its own target; extending a shutdown extends only that entry.
+      </p>
 
       {entries.length === 0 && <p className="hint muted">No schedules yet.</p>}
 
@@ -57,6 +61,7 @@ export function SchedulerPanel({ state, onClose }: { state: AppState; onClose: (
               onChange={(ev) => patch(i, { action: ev.target.value as ScheduleAction })}
             >
               <option value="power_off">Power OFF</option>
+              <option value="standby">Standby</option>
               <option value="power_on">Power ON</option>
               <option value="apply_preset">Apply preset</option>
             </select>
@@ -65,15 +70,24 @@ export function SchedulerPanel({ state, onClose }: { state: AppState; onClose: (
                 <option value="">— preset —</option>
                 {state.presets.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
               </select>
-            ) : epsIds.length > 1 ? (
+            ) : (
               <select value={e.target ?? "all"} onChange={(ev) => patch(i, { target: ev.target.value })}>
-                <option value="all">All power units</option>
-                {epsIds.map((id) => {
-                  const d = state.devices.find((x) => x.id === id)!;
-                  return <option key={id} value={id}>{d.label}</option>;
-                })}
+                <option value="all">Everything</option>
+                {groups.length > 0 && (
+                  <optgroup label="Power groups">
+                    {groups.map((g) => <option key={g.id} value={`group:${g.id}`}>{g.label}</option>)}
+                  </optgroup>
+                )}
+                {e.action !== "standby" && epsIds.length > 0 && (
+                  <optgroup label="Single EPS (whole unit)">
+                    {epsIds.map((id) => {
+                      const d = state.devices.find((x) => x.id === id)!;
+                      return <option key={id} value={id}>{d.label}</option>;
+                    })}
+                  </optgroup>
+                )}
               </select>
-            ) : null}
+            )}
             <input className="sched-label" value={e.label} placeholder="Label" onChange={(ev) => patch(i, { label: ev.target.value })} />
             <button className="icon-btn" aria-label="Remove" onClick={() => setEntries((es) => es.filter((_, x) => x !== i))}>✕</button>
           </div>

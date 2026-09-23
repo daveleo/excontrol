@@ -7,7 +7,9 @@ import { power } from "../api.js";
 export function PowerBanner({ domains }: { domains: PowerDomain[] }) {
   const [busy, setBusy] = useState<string | null>(null);
   const eps = domains.filter((d) => d.id !== ALWAYS_ON_DOMAIN);
-  const notable = eps.filter((d) => d.level !== "on" || d.detail);
+  // A unit that's simply partly on (some outputs deliberately off) is the EPS card's business,
+  // not a banner across the top of everyone's screen.
+  const notable = eps.filter((d) => d.level !== "on" || (d.detail && !d.partial));
   if (!notable.length) return null;
 
   const act = async (target: string, on: boolean) => {

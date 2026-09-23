@@ -393,9 +393,25 @@ function DeviceForm({
         {d.type !== "expromo-eps" && (
           <label className="field">
             <span>Powered by</span>
-            <select value={d.poweredBy ?? ""} onChange={(e) => onChange({ poweredBy: e.target.value || null })}>
-              <option value="">Always on</option>
+            <select
+              value={d.poweredBy ?? ""}
+              onChange={(e) => onChange({ poweredBy: e.target.value || null, ...(e.target.value ? {} : { poweredByOutput: null }) })}
+            >
+              <option value="">Own socket (not on an EPS)</option>
               {epsDevices.map((e) => <option key={e.id} value={e.id}>{e.label || e.id}</option>)}
+            </select>
+          </label>
+        )}
+
+        {d.type !== "expromo-eps" && d.poweredBy && (
+          <label className="field narrow">
+            <span>EPS output</span>
+            <select
+              value={d.poweredByOutput ?? ""}
+              onChange={(e) => onChange({ poweredByOutput: e.target.value ? Number(e.target.value) : null })}
+            >
+              <option value="">Whole unit</option>
+              {[1, 2, 3, 4, 5, 6].map((i) => <option key={i} value={i}>Output {i}</option>)}
             </select>
           </label>
         )}
@@ -432,6 +448,13 @@ function DeviceForm({
                       value={o?.label ?? ""} disabled={!o}
                       onChange={(e) => setOutput(idx, { label: e.target.value })}
                     />
+                    <label className="toggle small" title="Never switched off by Power off, groups or schedules (network switch, control PC…)">
+                      <input
+                        type="checkbox" checked={!!o?.protected} disabled={!o}
+                        onChange={(e) => setOutput(idx, { protected: e.target.checked })}
+                      />
+                      protected
+                    </label>
                   </div>
                 );
               })}

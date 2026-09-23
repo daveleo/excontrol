@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import type { Schedule } from "@excontrol/shared";
+import type { Schedule, AppState } from "@excontrol/shared";
+import { scheduleTargetLabel } from "../lib/targets.js";
 import { effectiveShutdown, mmss } from "@excontrol/shared";
 import { useNow } from "../lib/useNow.js";
 import { snoozeShutdown } from "../api.js";
@@ -7,7 +8,7 @@ import { snoozeShutdown } from "../api.js";
 const IMMINENT_MS = 15 * 60 * 1000;
 
 /** Full-screen warning in the last 15 minutes before an auto power-off. Dismissible. */
-export function ShutdownModal({ schedule }: { schedule: Schedule }) {
+export function ShutdownModal({ schedule, state }: { schedule: Schedule; state: Pick<AppState, "groups" | "devices"> }) {
   const now = useNow(1000);
   const [busy, setBusy] = useState(false);
   const [dismissedFor, setDismissedFor] = useState<number | null>(null);
@@ -35,7 +36,9 @@ export function ShutdownModal({ schedule }: { schedule: Schedule }) {
   return (
     <div className="modal-scrim">
       <div className="modal shutdown-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="sd-title">Powering off</div>
+        <div className="sd-title">
+          {shutdown?.entry?.action === "standby" ? "Going to standby" : "Powering off"}: {scheduleTargetLabel(state, shutdown?.entry?.target)}
+        </div>
         <div className="sd-countdown">{mmss(msLeft)}</div>
         <div className="sd-sub">at {new Date(target).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
         <button className="sd-extend" disabled={busy} onClick={extend}>Extend by 1 hour</button>

@@ -496,3 +496,67 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-si
 .toast.error { border-color: var(--err); }
 .toast.info { border-color: var(--ok); }
 ::selection { background: var(--accent-soft); }
+
+/* ---- power groups (0.3) ---- */
+.groups-row { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); margin-bottom: 16px; }
+.group-card { display: flex; flex-direction: column; gap: 8px; }
+.group-card.all { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.group-card[data-busy] { border-color: var(--warn); }
+.gtarget { font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.gtarget.on { color: var(--ok); border-color: var(--ok); }
+.gtarget.standby { color: var(--warn); border-color: var(--warn); }
+.gtarget.off { color: var(--text); border-color: var(--muted); }
+.gsummary { font-size: 13px; font-variant-numeric: tabular-nums; }
+.gsetby { font-size: 12px; color: var(--muted); }
+.gprogress { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--warn); }
+.pb-spinner.small { width: 12px; height: 12px; border-width: 2px; }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg button {
+  flex: 1; background: var(--panel-2); border: none; border-right: 1px solid var(--line); color: var(--text);
+  padding: 9px 6px; font-size: 13px; cursor: pointer; min-height: 38px;
+}
+.seg button:last-child { border-right: none; }
+.seg button:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 10%, var(--panel-2)); }
+.seg button.active.t-on { background: color-mix(in srgb, var(--ok) 22%, var(--panel)); font-weight: 600; }
+.seg button.active.t-standby { background: color-mix(in srgb, var(--warn) 22%, var(--panel)); font-weight: 600; }
+.seg button.active.t-off { background: color-mix(in srgb, var(--muted) 28%, var(--panel)); font-weight: 600; }
+.seg button.armed { background: color-mix(in srgb, var(--err) 22%, var(--panel)); color: var(--text); font-weight: 600; }
+.seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.power-seg { margin-bottom: 4px; }
+.gtoggle { align-self: flex-start; font-size: 12.5px; }
+.gmembers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.gmembers li { border-top: 1px dashed var(--line); padding-top: 6px; }
+.gm-line { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.gm-name { font-weight: 500; }
+.gm-state { font-size: 12px; color: var(--muted); }
+.gm-state.on { color: var(--ok); }
+.gm-state.standby, .gm-state.starting { color: var(--warn); }
+.gm-state.fault { color: var(--err); }
+.gm-why { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.gm-why.override { color: var(--accent); }
+.gm-effect { color: var(--muted); }
+.target-line { margin: 0; font-size: 12.5px; padding: 6px 8px; border-radius: 8px; background: var(--panel-2); border-left: 3px solid var(--line); }
+.target-line.t-on { border-left-color: var(--ok); }
+.target-line.t-standby { border-left-color: var(--warn); }
+.target-line.t-off { border-left-color: var(--muted); }
+.target-line .muted { color: var(--muted); }
+
+/* groups editor */
+.grp-edit { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.grp-edit-head { display: flex; gap: 8px; align-items: center; }
+.grp-label { flex: 1; background: var(--panel-2); border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 7px 9px; font-size: 14px; }
+.grp-members { display: flex; flex-direction: column; gap: 6px; }
+.grp-member { font-size: 13px; flex-wrap: wrap; }
+
+/* "turned on after its scheduled off" */
+.alert-pop {
+  position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 60;
+  width: min(380px, calc(100vw - 32px)); background: var(--panel); border: 1px solid var(--warn);
+  border-left: 5px solid var(--warn); border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.alert-title { font-weight: 700; font-size: 14px; }
+.alert-text { font-size: 13.5px; }
+.alert-meta { font-size: 12px; color: var(--muted); }
+.alert-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.alert-actions button { background: var(--panel-2); border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 6px 12px; cursor: pointer; }

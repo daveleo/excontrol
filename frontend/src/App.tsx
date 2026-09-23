@@ -6,6 +6,9 @@ import { PresetsPanel } from "./components/PresetsPanel.js";
 import { SchedulerPanel } from "./components/SchedulerPanel.js";
 import { ScheduleCard } from "./components/ScheduleCard.js";
 import { ShutdownModal } from "./components/ShutdownModal.js";
+import { PowerGroups } from "./components/PowerGroups.js";
+import { GroupsPanel } from "./components/GroupsPanel.js";
+import { AlertPopup } from "./components/AlertPopup.js";
 import { SetupWizardLoader } from "./components/SetupWizard.js";
 import { SettingsPanel } from "./components/SettingsPanel.js";
 import { UnlockModal } from "./components/UnlockModal.js";
@@ -63,7 +66,7 @@ export function App() {
 
 function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
   const { state, connected, toasts, dismiss } = useShowroom(onUnauthorized);
-  const [panel, setPanel] = useState<null | "presets" | "schedule" | "devices" | "settings">(null);
+  const [panel, setPanel] = useState<null | "presets" | "schedule" | "devices" | "settings" | "groups">(null);
 
   const scheduleCount = state?.schedule.entries.filter((e) => e.enabled).length ?? 0;
   const domainLevel = (deviceId: string) =>
@@ -110,6 +113,15 @@ function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
           </button>
           <button
             className="icon-text-btn"
+            title="Power groups"
+            disabled={!state || firstRun}
+            onClick={() => setPanel(panel === "groups" ? null : "groups")}
+          >
+            <GroupsIcon />
+            <span className="btn-label">Groups</span>
+          </button>
+          <button
+            className="icon-text-btn"
             title="Scheduler"
             disabled={firstRun}
             onClick={() => setPanel(panel === "schedule" ? null : "schedule")}
@@ -142,19 +154,29 @@ function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
         <>
           <PowerBanner domains={state.powerDomains} />
 
+          <PowerGroups state={state} />
+
           <main className="grid">
             {state.devices.map((d) => (
-              <DeviceCard key={d.id} device={d} powerLevel={domainLevel(d.id)} />
+              <DeviceCard
+                key={d.id}
+                device={d}
+                powerLevel={domainLevel(d.id)}
+                target={state.deviceTargets?.find((t) => t.deviceId === d.id)}
+                allDevices={state.devices}
+              />
             ))}
             {(state.schedule.entries.length > 0 || scheduleCount > 0) && (
-              <ScheduleCard schedule={state.schedule} />
+              <ScheduleCard schedule={state.schedule} state={state} />
             )}
           </main>
 
-          <ShutdownModal schedule={state.schedule} />
+          <ShutdownModal schedule={state.schedule} state={state} />
           {panel === "presets" && <PresetsPanel state={state} onClose={() => setPanel(null)} />}
           {panel === "schedule" && <SchedulerPanel state={state} onClose={() => setPanel(null)} />}
           {panel === "settings" && <SettingsPanel onClose={() => setPanel(null)} />}
+          {panel === "groups" && <GroupsPanel state={state} onClose={() => setPanel(null)} />}
+          <AlertPopup alerts={state.alerts ?? []} />
         </>
       )}
 
@@ -180,6 +202,15 @@ function DevicesIcon() {
       <rect x="3" y="15" width="18" height="5" rx="1.5" />
       <circle cx="7" cy="6.5" r="0.5" fill="currentColor" stroke="none" />
       <circle cx="7" cy="17.5" r="0.5" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function GroupsIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 3v6" strokeLinecap="round" />
+      <path d="M7.5 6.2a7 7 0 1 0 9 0" strokeLinecap="round" />
     </svg>
   );
 }

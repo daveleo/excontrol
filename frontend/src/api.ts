@@ -1,7 +1,7 @@
 import type {
   AppPreset, ScheduleEntry, SetupState, SetupDevice, SetupSaveBody, SetupSaveResponse,
   ProbeResult, ScanHit, AuthStatus, SetPasswordBody, AppSettingsBody, AppSettingsResponse,
-  UpdateCheckResponse,
+  UpdateCheckResponse, GroupConfig, PowerTarget,
 } from "@excontrol/shared";
 import { getToken, setToken, clearToken } from "./lib/auth.js";
 
@@ -21,6 +21,17 @@ export const setBlackout = (id: string, zoneId: string | undefined, blackout: bo
 
 export const setOn = (id: string, zoneId: string, on: boolean) =>
   post(`/api/devices/${id}/zones/${ZONE(zoneId)}/on`, { on });
+
+export const setPowerState = (id: string, zoneId: string | undefined, state: "on" | "blackout" | "standby") =>
+  post(`/api/devices/${id}/zones/${ZONE(zoneId)}/power`, { state });
+
+/* ---- power groups ---- */
+export const setGroupState = (id: string, state: PowerTarget) => post(`/api/groups/${id}/state`, { state });
+export const saveGroups = (groups: GroupConfig[]) =>
+  put("/api/groups", { groups }) as Promise<{ ok: boolean; groups: GroupConfig[] }>;
+export const getGroupConfig = () =>
+  send("GET", "/api/groups") as Promise<{ config: GroupConfig[] }>;
+export const dismissAlert = (id: string) => post(`/api/alerts/${id}/dismiss`, {});
 
 export const runAction = (id: string, name: string) =>
   post(`/api/devices/${id}/action/${name}`, {}).then((r) => String((r as { result?: unknown }).result ?? ""));

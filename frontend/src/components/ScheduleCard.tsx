@@ -1,12 +1,13 @@
 import { useState } from "react";
-import type { Schedule } from "@excontrol/shared";
+import type { Schedule, AppState } from "@excontrol/shared";
+import { scheduleTargetLabel } from "../lib/targets.js";
 import { effectiveShutdown, nextPowerOn, humanDuration, humanWhen } from "@excontrol/shared";
 import { useNow } from "../lib/useNow.js";
 import { snoozeShutdown, cancelShutdownExtension } from "../api.js";
 
 const IMMINENT_MS = 15 * 60 * 1000;
 
-export function ScheduleCard({ schedule }: { schedule: Schedule }) {
+export function ScheduleCard({ schedule, state }: { schedule: Schedule; state: Pick<AppState, "groups" | "devices"> }) {
   const now = useNow(1000);
   const [busy, setBusy] = useState(false);
 
@@ -41,7 +42,8 @@ export function ScheduleCard({ schedule }: { schedule: Schedule }) {
       <div className="sched-metrics">
         <div className="metric">
           <span className="metric-label">
-            Time until shutdown
+            Time until {shutdown?.entry?.action === "standby" ? "standby" : "shutdown"}
+            {shutdown?.entry && <> · {scheduleTargetLabel(state, shutdown.entry.target)}</>}
             {extended && <span className="ext-tag"> (Extended +{shutdown!.extendedHours}h)</span>}
           </span>
           <span className={`metric-value ${imminent ? "warn" : ""}`}>

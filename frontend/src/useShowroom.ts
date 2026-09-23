@@ -79,6 +79,10 @@ export function useShowroom(onUnauthorized?: () => void): Hook {
               return { ...prev, schedule: msg.schedule };
             case "update":
               return { ...prev, updateInfo: msg.info };
+            case "groups":
+              return { ...prev, groups: msg.groups, deviceTargets: msg.deviceTargets };
+            case "alerts":
+              return { ...prev, alerts: msg.alerts };
             default:
               return prev;
           }

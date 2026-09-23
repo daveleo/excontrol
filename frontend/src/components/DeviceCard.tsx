@@ -1,6 +1,8 @@
 import { useRef, useState } from "react";
-import type { DeviceState, ZoneState, PowerLevel } from "@excontrol/shared";
-import { setBrightness, setVolume, recallPreset, setBlackout, setOn, runAction } from "../api.js";
+import type { DeviceState, ZoneState, PowerLevel, DeviceTarget } from "@excontrol/shared";
+import { setBrightness, setVolume, recallPreset, setBlackout, setOn, runAction, setPowerState } from "../api.js";
+
+const TARGET_LABEL = { on: "On", standby: "Standby", off: "Off" } as const;
 
 const STATUS_LABEL: Record<DeviceState["status"], string> = {
   connecting: "Connecting…",
@@ -15,7 +17,16 @@ const STATUS_LABEL: Record<DeviceState["status"], string> = {
 const hasZoneControls = (t: DeviceState["type"]) => t === "novastar-h" || t === "novastar-coex";
 const hasBrightness = (t: DeviceState["type"]) => hasZoneControls(t) || t === "exview";
 
-export function DeviceCard({ device, powerLevel }: { device: DeviceState; powerLevel?: PowerLevel }) {
+export function DeviceCard({
+  device, powerLevel, target, allDevices = [],
+}: {
+  device: DeviceState;
+  powerLevel?: PowerLevel;
+  /** the power engine's resolved target for this device, if any group has set one */
+  target?: DeviceTarget;
+  /** for naming what hangs off an EPS's outputs */
+  allDevices?: DeviceState[];
+}) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -47,6 +58,19 @@ export function DeviceCard({ device, powerLevel }: { device: DeviceState; powerL
         <span className={`status ${device.status}`}>{STATUS_LABEL[device.status]}</span>
       </div>
 
+      {target?.target && (
+        <p className={`target-line t-${target.target}`}>
+          <b>{TARGET_LABEL[target.target]}</b>
+          {target.manual ? " · set on this card" : ` · via ${target.via.join(", ")}`}
+          {target.effect && <span className="muted"> — {target.effect}</span>}
+        </p>
+      )}
+      {device.poweredBy && (
+        <p className="hint muted small">
+          Power: {allDevices.find((d) => d.id === device.poweredBy)?.label ?? device.poweredBy}
+          {device.poweredByOutput ? `, output ${device.poweredByOutput}` : ", whole unit"}
+        </p>
+      )}
       {device.status === "powered-off" && (
         <p className="hint muted">Waiting for power. Controls return once this equipment is on.</p>
       )}
@@ -62,7 +86,7 @@ export function DeviceCard({ device, powerLevel }: { device: DeviceState; powerL
         <p className="cache-hint">Showing last known configuration — not live while {device.label} is unreachable.</p>
       )}
 
-      {isEps && <EpsBody device={device} powerLevel={powerLevel} guard={guard} busy={busy} />}
+      {isEps && <EpsBody device={device} powerLevel={powerLevel} guard={guard} busy={busy} allDevices={allDevices} />}
 
       {!isEps &&
         device.zones.map((z) => (
@@ -77,6 +101,7 @@ export function DeviceCard({ device, powerLevel }: { device: DeviceState; powerL
             onPreset={(id) => guard(() => recallPreset(device.id, z.id, id))()}
             onBlackout={(on) => guard(() => setBlackout(device.id, z.id, on))()}
             onOn={(on) => guard(() => setOn(device.id, z.id, on))()}
+            onPowerState={(st) => guard(() => setPowerState(device.id, z.id, st))()}
           />
         ))}
 
@@ -103,6 +128,7 @@ function ZoneControls({
   onPreset,
   onBlackout,
   onOn,
+  onPowerState,
 }: {
   zone: ZoneState;
   deviceType: DeviceState["type"];
@@ -113,13 +139,30 @@ function ZoneControls({
   onPreset: (id: number) => void;
   onBlackout: (on: boolean) => void;
   onOn: (on: boolean) => void;
+  onPowerState: (state: "on" | "blackout" | "standby") => void;
 }) {
   const controls = hasZoneControls(deviceType);
   return (
     <div className="zone">
       {showLabel && <div className="zone-label">{zone.label}</div>}
 
-      {zone.on != null && (
+      {deviceType === "exview" && (
+        <div className="seg power-seg" role="group" aria-label="Screen power">
+          {(["on", "blackout", "standby"] as const).map((st) => (
+            <button
+              key={st}
+              className={`${zone.powerState === st ? "active " : ""}t-${st === "on" ? "on" : st === "blackout" ? "standby" : "off"}`}
+              disabled={disabled}
+              onClick={() => onPowerState(st)}
+              title={st === "blackout" ? "Picture off, instantly reversible" : st === "standby" ? "Deep standby (0xC007) — takes ~20 s, wake takes 30–70 s" : "Picture on"}
+            >
+              {st === "on" ? "On" : st === "blackout" ? "Blackout" : "Standby"}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {deviceType !== "exview" && zone.on != null && (
         <button
           className={`blackout-btn power-btn ${zone.powerState === "standby" ? "standby" : zone.on ? "on" : ""}`}
           disabled={disabled}
@@ -187,8 +230,10 @@ function EpsBody({
   powerLevel,
   guard,
   busy,
+  allDevices,
 }: {
   device: DeviceState;
+  allDevices: DeviceState[];
   powerLevel?: PowerLevel;
   guard: (fn: () => Promise<unknown>) => () => Promise<void>;
   busy: boolean;
@@ -198,6 +243,11 @@ function EpsBody({
   const state = String(e.state ?? "");
   const system = String(e.system ?? "");
   const offOutputs = [...outputs].map((c, i) => (c === "0" ? i + 1 : 0)).filter(Boolean);
+  const members = allDevices.filter((d) => d.poweredBy === device.id);
+  const claimed = new Map(members.filter((d) => d.poweredByOutput).map((d) => [d.poweredByOutput!, d.label]));
+  const whole = members.filter((d) => !d.poweredByOutput).map((d) => d.label);
+  const ownerOf = (i: number) => claimed.get(i) ?? (whole.length ? whole.join(", ") : "");
+  const d5 = String(e.d5 ?? "");
 
   const big =
     powerLevel === "starting" ? "INITIALIZING…"
@@ -215,12 +265,25 @@ function EpsBody({
           <span className="section-label">Outputs</span>
           <div className="out-dots">
             {[...outputs].map((c, i) => (
-              <span key={i} className={c === "1" ? "out on" : "out off"} title={`Output ${i + 1}`} />
+              <span key={i} className={c === "1" ? "out on" : "out off"} title={`Output ${i + 1}${ownerOf(i + 1) ? " — " + ownerOf(i + 1) : ""}`} />
             ))}
           </div>
         </div>
       )}
-      {offOutputs.length > 0 && system === "ON" && <p className="err">Output {offOutputs.join(", ")} is OFF</p>}
+      {offOutputs.length > 0 && system === "ON" && (
+        <p className="hint">
+          Partly on — output {offOutputs.join(", ")} off
+          {offOutputs.some((i) => ownerOf(i)) && ` (${[...new Set(offOutputs.map(ownerOf).filter(Boolean))].join("; ")})`}.
+          {" "}Power on switches on only the missing outputs; the running ones stay on.
+        </p>
+      )}
+      {claimed.size > 0 && (
+        <p className="hint muted small">
+          {[...claimed].sort((a, b) => a[0] - b[0]).map(([i, l]) => `out ${i}: ${l}`).join(" · ")}
+          {whole.length > 0 && ` · rest: ${whole.join(", ")}`}
+        </p>
+      )}
+      {d5 === "ON" && <p className="hint">Wall switch input (D5) is ON — flicking it changes power too.</p>}
       {String(e.net ?? "") && String(e.net) !== "OK" && <p className="err">Network: {String(e.net)}</p>}
 
       <div className="actions">
