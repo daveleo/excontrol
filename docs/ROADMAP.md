@@ -516,8 +516,17 @@ implements the first slice of are summarised here; the full write-ups were share
 - API: `POST /api/groups/:id/state`, `GET|PUT /api/groups`,
   `POST /api/devices/:id/zones/:zone/power`, `POST /api/alerts/:id/dismiss`.
   `/api/power/all/on|off` now means Everything.
-- Tests: 199 (new: fake EPS modelled on the measured firmware quirks, engine resolution and
+- Tests: 184 (new: fake EPS modelled on the measured firmware quirks, engine resolution and
   planning, end-to-end engine runs, 0xC007 frame, per-entry extension).
+- **Verified on the real spare EPS (fw v2.2)** with the actual driver, while a second
+  "foreign" connection polled the unit continuously: power-off with a protected output left
+  that output on; power-on from partly-on waited out the minimum off-time and switched on only
+  the missing outputs, >= 300 ms apart, never dropping the running one; single-relay on/off
+  verified; whole-unit on from fully off used the unit's own sequence. With another controller
+  polling every 15 ms, 6/6 commands were applied and verified (some needed retries — worst case
+  ~11 s for one relay).
+- **Installed on the Aarhus showroom PC** (v0.3.0, local build, no release tag). The group
+  demo and eXview-on-output-3 mapping still need the showroom config updated.
 - **Not yet**: nested groups, per-surface scoping, exception dates / catch-up, Companion
   group actions, feeds (per-circuit parallel start — today all units are chained).
 
