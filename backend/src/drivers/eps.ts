@@ -87,7 +87,7 @@ export class EpsDriver extends BaseDriver {
     // on/off zone; the whole-unit Power on/off button (action("power_on"/"power_off"))
     // is unaffected either way.
     this.zoneState = this.c.independentOutputs
-      ? (this.c.outputs ?? []).map((o) => ({ id: o.id, label: o.label, on: undefined }))
+      ? (this.c.outputs ?? []).map((o) => ({ id: o.id, label: o.label, relay: o.index, on: undefined }))
       : [];
   }
 

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type {
   DeviceState, DeviceTarget, GroupConfig, GroupState, PowerAlert, PowerTarget,
 } from "@excontrol/shared";
-import { ALL_GROUP } from "@excontrol/shared";
+import { ALL_GROUP, roomLabel } from "@excontrol/shared";
 import { getConfig, saveConfig } from "../config.js";
 import { store } from "./state.js";
 import { bus, toast } from "./bus.js";
@@ -70,6 +70,7 @@ export function resolveTargets(
   groups: GroupConfig[],
   targets: Map<string, PowerTarget>,
   manual: Map<string, PowerTarget> = new Map(),
+  allLabel = "Everything",
 ): Map<string, Resolved> {
   const out = new Map<string, Resolved>();
   for (const d of devices) {
@@ -94,7 +95,7 @@ export function resolveTargets(
       const all = targets.get(ALL_GROUP);
       if (all) {
         best = all;
-        via = ["Everything"];
+        via = [allLabel];
       }
     }
     out.set(d.id, { target: best, via });
@@ -162,7 +163,11 @@ function groupsCfg(): GroupConfig[] {
 function resolveNow(): Map<string, Resolved> {
   const t = new Map<string, PowerTarget>();
   for (const [k, v] of targets) t.set(k, v.target);
-  return resolveTargets(store.all(), groupsCfg(), t, manual);
+  return resolveTargets(store.all(), groupsCfg(), t, manual, room());
+}
+
+function room(): string {
+  return roomLabel(getConfig().app.name);
 }
 
 /* ---- observed state, for summaries and drift ---- */
@@ -254,14 +259,18 @@ function publishNow(): void {
     };
   };
   const groups = [
-    mk(ALL_GROUP, "Everything", controllable),
+    mk(ALL_GROUP, room(), controllable),
     ...groupsCfg().map((g) => mk(g.id, g.label, g.members.filter((m) => devices.some((d) => d.id === m)))),
   ];
   const deviceTargets: DeviceTarget[] = [];
   for (const d of devices) {
     const r = res.get(d.id);
     if (!r) continue;
-    deviceTargets.push({ deviceId: d.id, target: r.target, via: r.via, manual: r.manual, effect: effectFor(d, r, held) });
+    const keepers = held.get(d.id);
+    deviceTargets.push({
+      deviceId: d.id, target: r.target, via: r.via, manual: r.manual, effect: effectFor(d, r, held),
+      ...(keepers?.length ? { heldBy: keepers.map((id) => store.get(id)?.label ?? id) } : {}),
+    });
   }
   store.setGroups(groups, deviceTargets);
 }
@@ -290,7 +299,7 @@ export function setGroupTarget(id: string, target: PowerTarget, setBy: string): 
     targets.set(id, rec);
     for (const m of groupsCfg().find((g) => g.id === id)?.members ?? []) manual.delete(m);
   }
-  const label = id === ALL_GROUP ? "Everything" : groupsCfg().find((g) => g.id === id)?.label ?? id;
+  const label = id === ALL_GROUP ? room() : groupsCfg().find((g) => g.id === id)?.label ?? id;
   log.info({ group: id, target, setBy }, "power group target set");
   toast("info", `${label} → ${LABEL[target]}`);
   return runReconcile([id]);
@@ -370,7 +379,7 @@ function checkDrift(id: string): void {
   const r = resolveNow().get(id);
   if (!r?.target || r.target === "on" || r.manual) return;
   // it's meant to be off/standby, but held on for someone else? then "on" is expected for power-only kinds
-  const rec = r.via.includes("Everything") ? targets.get(ALL_GROUP) : [...targets.entries()].find(([gid]) =>
+  const rec = r.via.includes(room()) && !groupsCfg().some((g) => g.label === room()) ? targets.get(ALL_GROUP) : [...targets.entries()].find(([gid]) =>
     groupsCfg().find((g) => g.id === gid && g.members.includes(id) && r.via.includes(g.label)))?.[1];
   const when = rec ? new Date(rec.setAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
   const text = `${d.label} turned On after it was set to ${LABEL[r.target]}${rec ? ` (${rec.setBy}, ${when})` : ""}.`;

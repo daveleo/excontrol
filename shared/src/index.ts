@@ -41,6 +41,8 @@ export interface ZoneState {
   activePreset?: number;
   /** a plain on/off zone (EPS relay, or an eXview's own power state) rather than a brightness one */
   on?: boolean;
+  /** EPS output zones: the physical relay number (1-6) */
+  relay?: number;
   /** eXview only: the real power state, richer than `on` above — a prolonged blackout can
    *  auto-transition into a restricted "standby" the device's own firmware enters after a
    *  configurable timeout (set on the device itself, invisible to this app until it happens),
@@ -157,6 +159,13 @@ export type PowerTarget = "on" | "standby" | "off";
 /** id of the implicit group containing every device. */
 export const ALL_GROUP = "all";
 
+/** What the room-wide group is called on screen: the installation's display name (e.g.
+ *  "Showroom"), or "Everything" while it still has the product's default name. */
+export function roomLabel(appName?: string): string {
+  const n = (appName ?? "").trim();
+  return !n || n.toLowerCase() === "excontrol" ? "Everything" : n;
+}
+
 export interface GroupConfig {
   id: string;
   label: string;
@@ -188,6 +197,9 @@ export interface DeviceTarget {
   via: string[];
   /** a manual device-level command has overridden the group target until its next change */
   manual?: boolean;
+  /** it's meant to be Off, but its power stays on because these devices (labels) still need
+   *  the same EPS relay — the one case a card should explain itself */
+  heldBy?: string[];
   /** plain-language consequence, e.g. "EPS output 3 switched off", "held on: shares
    *  power with NovaStar COEX (On via Demo corner) — blacked out instead" */
   effect?: string;

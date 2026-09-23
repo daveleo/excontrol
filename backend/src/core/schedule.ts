@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Schedule, ScheduleEntry, ScheduleAction } from "@excontrol/shared";
-import { nextEntry, SHUTDOWN_ACTIONS, ALL_GROUP } from "@excontrol/shared";
+import { nextEntry, SHUTDOWN_ACTIONS, ALL_GROUP, roomLabel } from "@excontrol/shared";
 import { getConfig, saveConfig } from "../config.js";
 import { bus, toast } from "./bus.js";
 import { powerDomain } from "./power.js";
@@ -72,7 +72,7 @@ export function snooze(add: number, clear = false): Schedule {
 /** "Everything", a group's label, or an EPS's label — for messages. */
 export function targetLabel(target: string | undefined): string {
   const t = target || "all";
-  if (t === ALL_GROUP) return "Everything";
+  if (t === ALL_GROUP) return roomLabel(getConfig().app.name);
   if (t.startsWith("group:")) return getConfig().groups.find((g) => g.id === t.slice(6))?.label ?? t.slice(6);
   return getConfig().devices.find((d) => d.id === t)?.label ?? t;
 }
