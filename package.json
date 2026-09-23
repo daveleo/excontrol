@@ -1,6 +1,6 @@
 {
   "name": "excontrol",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "eXcontrol — a simple web control overlay for LED installations (NovaStar H-series / COEX, Expromo EPS, OBS)",
   "license": "MIT",
