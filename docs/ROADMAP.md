@@ -530,6 +530,37 @@ implements the first slice of are summarised here; the full write-ups were share
 - **Not yet**: nested groups, per-surface scoping, exception dates / catch-up, Companion
   group actions, feeds (per-circuit parallel start — today all units are chained).
 
+## Phase 14 — Calm dashboard: UX review implemented (v0.3.1)  ✅
+
+A UX review of 0.3.0 on the live showroom found the same fact ("the room is off") said four
+times in four styles, red used for a normal evening, device cards explaining the system
+before offering a control, installer detail (hex codes, probe errors, ids, relay rows) on the
+operator's screen, three meanings of "Presets", and seven toolbar items. The 23 agreed changes:
+
+- **Power bar** (one place for the room): state in one word, one primary action that says
+  what it does (Turn on / Turn off — off asks for a second tap), Standby, the next scheduled
+  change with +1 hour / Undo extension, and faults. Replaces the red EPS banner, the
+  Everything card and the Scheduler card. The room-wide group takes the installation's
+  display name (Setup › System › Room name), "Everything" until one is set.
+- **Groups** as compact rows under the bar; the per-member "why" behind a tap.
+- **Scenes** (the app's presets, renamed) as one-tap chips on the dashboard; ★ = startup scene.
+- **EPS units** as a slim power strip at the bottom; relay-level control under Details.
+- **Device cards** with one anatomy: name + one status word, picture control (the same
+  On · Black control for NovaStar and eXview, + Standby on eXview), sliders, inputs/presets.
+  No power / not responding collapses to one line with the last settings. A chip only when a
+  state is surprising (set by hand; kept on because another device shares its relay).
+- **One colour rule** (`frontend/src/lib/status.ts`): on green, off grey, standby/starting
+  amber, fault red — and red for nothing else. Sentence-case words; errors say what to do.
+- **Toolbar**: Schedule · Setup · theme. **Setup** is one full-screen place — Devices
+  (read-only rows, editor on tap, id under Advanced, add-device tiles with Find on network),
+  Groups, Scenes, System (room name, port, autostart, updates, version), Access, Backup.
+- **Schedule** entries read as sentences ("Every day except Fr at 17:00 turn off Showroom"),
+  save themselves with Undo, and a 7-day strip shows what happens when.
+- **Phone**: cards collapse to header + picture control; the showroom dashboard went from
+  ~3100 px to ~1100 px of scrolling.
+- Backend: `roomLabel()`, `DeviceTarget.heldBy`, `ZoneState.relay` for EPS output zones.
+  No change to how anything is controlled.
+
 ## Known gaps / decisions pending
 
 - Default Electron icon everywhere (taskbar, tray, installer) — needs artwork.
