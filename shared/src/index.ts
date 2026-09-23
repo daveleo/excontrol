@@ -57,6 +57,9 @@ export interface DeviceState {
   lastSeen?: number;
   /** id of the EPS that powers this device, or null/undefined for "always on". */
   poweredBy?: string | null;
+  /** the one EPS relay (1-6) this device hangs off. null/undefined = the whole unit, i.e.
+   *  every output of that EPS not claimed by another device's poweredByOutput. */
+  poweredByOutput?: number | null;
   zones: ZoneState[];
   /** device-type extras: EPS status fields, OBS programScene, … */
   extra?: Record<string, unknown>;
@@ -78,6 +81,9 @@ export interface PowerDomain {
   detail?: string;
   /** device ids in this domain */
   members: string[];
+  /** true when the only thing noteworthy is that some outputs are off (PARTIAL_ON) — the
+   *  top banner leaves that to the EPS card instead of alarming everyone about it. */
+  partial?: boolean;
   /** absent for the always-on group */
   eps?: {
     system?: string;
@@ -112,7 +118,7 @@ export interface AppPreset {
 
 /* ---------- scheduler ---------- */
 
-export type ScheduleAction = "power_on" | "power_off" | "apply_preset";
+export type ScheduleAction = "power_on" | "power_off" | "standby" | "apply_preset";
 
 export interface ScheduleEntry {
   id: string;
@@ -120,7 +126,8 @@ export interface ScheduleEntry {
   time: string;   // "HH:MM" 24h local
   days: number[]; // 0=Sun..6=Sat; [] = every day
   action: ScheduleAction;
-  /** power_on / power_off: an EPS id or "all". */
+  /** power_on / power_off / standby: "all" (Everything), "group:<id>", or an EPS id
+   *  (that one unit's whole-unit power, the pre-0.3 behaviour). */
   target?: string;
   /** apply_preset: the preset id. */
   presetId?: string;
@@ -136,6 +143,62 @@ export interface Schedule {
   snoozeUntil?: number;
   /** total hours the shutdown has been pushed back, for display. */
   snoozeHours?: number;
+  /** the entry whose occurrence was extended — only that entry is held back, and only its
+   *  own target fires when the extension runs out. Absent on pre-0.3 configs (then the
+   *  extension applies to whichever shutdown was next, as before, but still fires only it). */
+  snoozeEntryId?: string;
+}
+
+/* ---------- power groups ---------- */
+
+/** What a group (or "Everything") is asked to be. Ordered: on > standby > off. */
+export type PowerTarget = "on" | "standby" | "off";
+
+/** id of the implicit group containing every device. */
+export const ALL_GROUP = "all";
+
+export interface GroupConfig {
+  id: string;
+  label: string;
+  /** device ids. A device may be in several groups — it then follows the highest target
+   *  among them (on beats standby beats off). */
+  members: string[];
+}
+
+export interface GroupState {
+  id: string;
+  label: string;
+  members: string[];
+  target?: PowerTarget;
+  /** who set the target: "Dashboard", "Schedule: Power off", "Companion"… */
+  setBy?: string;
+  setAt?: number;
+  busy: boolean;
+  /** one line of what the engine is doing right now for this group */
+  progress?: string;
+  /** observed, e.g. "2 on · 1 standby · 1 off" */
+  summary: string;
+}
+
+/** The engine's resolved view of one device: what it should be, and why. */
+export interface DeviceTarget {
+  deviceId: string;
+  target?: PowerTarget;
+  /** labels of the groups that decided the target (the highest ones) */
+  via: string[];
+  /** a manual device-level command has overridden the group target until its next change */
+  manual?: boolean;
+  /** plain-language consequence, e.g. "EPS output 3 switched off", "held on: shares
+   *  power with NovaStar COEX (On via Demo corner) — blacked out instead" */
+  effect?: string;
+}
+
+export interface PowerAlert {
+  id: string;
+  at: number;
+  level: "info" | "warn";
+  text: string;
+  deviceId?: string;
 }
 
 /* ---------- full state ---------- */
@@ -156,6 +219,10 @@ export interface AppState {
   powerDomains: PowerDomain[];
   presets: AppPreset[];
   schedule: Schedule;
+  /** "Everything" (id ALL_GROUP) first, then the configured groups */
+  groups: GroupState[];
+  deviceTargets: DeviceTarget[];
+  alerts: PowerAlert[];
   /** null outside Electron, or before the first check has completed */
   updateInfo: UpdateInfo | null;
 }
@@ -168,6 +235,8 @@ export type ServerMessage =
   | { t: "power"; domains: PowerDomain[] }
   | { t: "presets"; presets: AppPreset[] }
   | { t: "schedule"; schedule: Schedule }
+  | { t: "groups"; groups: GroupState[]; deviceTargets: DeviceTarget[] }
+  | { t: "alerts"; alerts: PowerAlert[] }
   | { t: "update"; info: UpdateInfo }
   | { t: "reload"; reason: string }
   | { t: "toast"; level: "info" | "warn" | "error"; text: string };
@@ -179,5 +248,8 @@ export interface SetVolumeBody { volume: number }
 export interface RecallPresetBody { presetId: number }
 export interface SetBlackoutBody { blackout: boolean }
 export interface SetOnBody { on: boolean }
+export interface SetPowerStateBody { state: "on" | "blackout" | "standby" }
+export interface SetGroupStateBody { state: PowerTarget }
+export interface SaveGroupsBody { groups: GroupConfig[] }
 export interface SnoozeBody { hours?: number; clear?: boolean }
 export interface ApiError { error: string }

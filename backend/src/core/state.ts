@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import type { DeviceState, PowerDomain, AppState, AppInfo, UpdateInfo, ZoneState } from "@excontrol/shared";
+import type {
+  DeviceState, PowerDomain, AppState, AppInfo, UpdateInfo, ZoneState, PowerLevel, GroupState, DeviceTarget, PowerAlert,
+} from "@excontrol/shared";
 import { BRAND } from "@excontrol/shared";
 import { bus, type DevicePatch } from "./bus.js";
 import { getConfig, isConfigured, isSettingsLocked } from "../config.js";
@@ -47,6 +49,11 @@ function pkgVersion(): string {
 class Store {
   private devices = new Map<string, DeviceState>();
   private domains = new Map<string, PowerDomain>();
+  /** per-device power level, computed by power.ts from its EPS + output */
+  private devicePower = new Map<string, PowerLevel>();
+  private groupStates: GroupState[] = [];
+  private deviceTargets: DeviceTarget[] = [];
+  private alerts: PowerAlert[] = [];
   readonly startedAt = Date.now();
   private updateInfo: UpdateInfo | null = null;
 
@@ -119,6 +126,32 @@ class Store {
     return this.domainsList().find((d) => d.members.includes(deviceId));
   }
 
+  setDevicePower(map: Map<string, PowerLevel>): void {
+    this.devicePower = map;
+  }
+  /** The power level of this one device's supply: its EPS output, or the whole-unit share.
+   *  Falls back to its domain's level (and to undefined for always-on devices). */
+  powerOf(deviceId: string): PowerLevel | undefined {
+    return this.devicePower.get(deviceId) ?? this.domainOf(deviceId)?.level;
+  }
+
+  setGroups(groups: GroupState[], targets: DeviceTarget[]): void {
+    const changed =
+      JSON.stringify(groups) !== JSON.stringify(this.groupStates) ||
+      JSON.stringify(targets) !== JSON.stringify(this.deviceTargets);
+    this.groupStates = groups;
+    this.deviceTargets = targets;
+    if (changed) bus.emit("broadcast", { t: "groups", groups, deviceTargets: targets });
+  }
+
+  setAlerts(alerts: PowerAlert[]): void {
+    this.alerts = alerts;
+    bus.emit("broadcast", { t: "alerts", alerts });
+  }
+  alertsList(): PowerAlert[] {
+    return this.alerts;
+  }
+
   appInfo(): AppInfo {
     return {
       name: getConfig().app.name || BRAND.name,
@@ -137,6 +170,9 @@ class Store {
       powerDomains: this.domainsList(),
       presets: cfg.presets,
       schedule: cfg.schedule,
+      groups: this.groupStates,
+      deviceTargets: this.deviceTargets,
+      alerts: this.alerts,
       updateInfo: this.updateInfo,
     };
   }

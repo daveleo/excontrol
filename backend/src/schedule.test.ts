@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { nextOccurrence, effectiveShutdown, nextPowerOn, humanDuration, mmss } from "@excontrol/shared";
+import { nextOccurrence, effectiveShutdown, nextPowerOn, humanDuration, mmss, nextEntry } from "@excontrol/shared";
 import type { Schedule, ScheduleEntry } from "@excontrol/shared";
 
 const entry = (p: Partial<ScheduleEntry>): ScheduleEntry => ({
@@ -79,5 +79,37 @@ describe("nextPowerOn / formatting", () => {
   it("mmss clamps and pads", () => {
     expect(mmss(-5)).toBe("0:00");
     expect(mmss(65_000)).toBe("1:05");
+  });
+});
+
+describe("shutdowns target something specific (0.3)", () => {
+  const a = entry({ id: "a", time: "17:00", target: "group:wall" });
+  const b = entry({ id: "b", time: "18:00", action: "standby", target: "group:lobby" });
+
+  it("standby entries count as shutdowns and the result names the entry", () => {
+    const s = sched([b]);
+    expect(effectiveShutdown(s, WED_NOON)?.entry?.id).toBe("b");
+  });
+
+  it("an extension holds back only its own entry — another shutdown in between still shows as next", () => {
+    const ext = new Date(2026, 0, 7, 19, 0).getTime(); // wall's 17:00 pushed to 19:00
+    const s = sched([a, b], { snoozeUntil: ext, snoozeHours: 2, snoozeEntryId: "a" });
+    const next = effectiveShutdown(s, WED_NOON)!;
+    expect(next.entry?.id).toBe("b"); // lobby standby at 18:00 comes first
+    expect(next.at.getHours()).toBe(18);
+  });
+
+  it("…and once that's past, the extended entry is next, at its extended time", () => {
+    const ext = new Date(2026, 0, 7, 19, 0).getTime();
+    const s = sched([a, b], { snoozeUntil: ext, snoozeHours: 2, snoozeEntryId: "a" });
+    const after = new Date(2026, 0, 7, 18, 30);
+    const next = effectiveShutdown(s, after)!;
+    expect(next.entry?.id).toBe("a");
+    expect(next.extendedHours).toBe(2);
+    expect(next.at.getHours()).toBe(19);
+  });
+
+  it("nextEntry can skip an entry", () => {
+    expect(nextEntry(sched([a, b]), ["power_off", "standby"], WED_NOON, "a")?.entry.id).toBe("b");
   });
 });

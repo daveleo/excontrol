@@ -2,17 +2,31 @@
  * Pure schedule math — shared by the backend ticker and the front-end countdown so they
  * can never drift. Local time throughout.
  */
-import type { Schedule, ScheduleAction } from "./index.js";
+import type { Schedule, ScheduleAction, ScheduleEntry } from "./index.js";
+
+/** Entries that take the room down — both get the 15-min warning and can be extended. */
+export const SHUTDOWN_ACTIONS: ScheduleAction[] = ["power_off", "standby"];
 
 /** Next moment (epoch ms) an enabled entry with this action fires, at or after `from`. */
 export function nextOccurrence(
   schedule: Pick<Schedule, "entries">,
-  action: ScheduleAction,
+  action: ScheduleAction | ScheduleAction[],
   from: Date = new Date(),
 ): number | null {
-  let best: number | null = null;
+  return nextEntry(schedule, action, from)?.at ?? null;
+}
+
+/** Like nextOccurrence, but also says which entry it is. */
+export function nextEntry(
+  schedule: Pick<Schedule, "entries">,
+  action: ScheduleAction | ScheduleAction[],
+  from: Date = new Date(),
+  skipEntryId?: string,
+): { at: number; entry: ScheduleEntry } | null {
+  const actions = Array.isArray(action) ? action : [action];
+  let best: { at: number; entry: ScheduleEntry } | null = null;
   for (const e of schedule.entries) {
-    if (!e.enabled || e.action !== action) continue;
+    if (!e.enabled || !actions.includes(e.action) || e.id === skipEntryId) continue;
     const m = /^(\d{1,2}):(\d{2})$/.exec(e.time);
     if (!m) continue;
     const hh = Number(m[1]);
@@ -23,7 +37,7 @@ export function nextOccurrence(
       cand.setHours(hh, mm, 0, 0);
       if (cand.getTime() <= from.getTime()) continue;
       if (e.days.length && !e.days.includes(cand.getDay())) continue;
-      if (best === null || cand.getTime() < best) best = cand.getTime();
+      if (best === null || cand.getTime() < best.at) best = { at: cand.getTime(), entry: e };
       break;
     }
   }
@@ -37,13 +51,17 @@ export function nextOccurrence(
 export function effectiveShutdown(
   schedule: Schedule,
   now: Date = new Date(),
-): { at: Date; extendedHours: number } | null {
+): { at: Date; extendedHours: number; entry?: ScheduleEntry } | null {
   const snoozeUntil = schedule.snoozeUntil ?? 0;
-  if (snoozeUntil > now.getTime()) {
-    return { at: new Date(snoozeUntil), extendedHours: schedule.snoozeHours ?? 0 };
+  const snoozed = snoozeUntil > now.getTime();
+  // The extended entry is held back until snoozeUntil; any *other* shutdown that comes
+  // sooner is still the next thing that will actually happen.
+  const other = nextEntry(schedule, SHUTDOWN_ACTIONS, now, snoozed ? schedule.snoozeEntryId : undefined);
+  if (snoozed && (!other || other.at >= snoozeUntil || !schedule.snoozeEntryId)) {
+    const entry = schedule.entries.find((e) => e.id === schedule.snoozeEntryId);
+    return { at: new Date(snoozeUntil), extendedHours: schedule.snoozeHours ?? 0, entry };
   }
-  const raw = nextOccurrence(schedule, "power_off", now);
-  return raw ? { at: new Date(raw), extendedHours: 0 } : null;
+  return other ? { at: new Date(other.at), extendedHours: 0, entry: other.entry } : null;
 }
 
 export function nextPowerOn(schedule: Schedule, now: Date = new Date()): Date | null {

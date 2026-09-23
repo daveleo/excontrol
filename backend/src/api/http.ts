@@ -8,7 +8,8 @@ import { zipSync, strToU8 } from "fflate";
 import type {
   SetBrightnessBody, SetVolumeBody, RecallPresetBody, SetBlackoutBody, SetOnBody, AppPreset, ScheduleEntry,
   SetupDevice, SetupSaveBody, SetupSaveResponse, LoginBody, SetPasswordBody, UpdateStatusBody,
-  AppSettingsBody, AppSettingsResponse, UpdateCheckResponse,
+  AppSettingsBody, AppSettingsResponse, UpdateCheckResponse, SetPowerStateBody, SetGroupStateBody, SaveGroupsBody,
+  PowerTarget,
 } from "@excontrol/shared";
 import { BRAND } from "@excontrol/shared";
 import { store } from "../core/state.js";
@@ -17,6 +18,7 @@ import { bus } from "../core/bus.js";
 import { getPresets, savePreset, deletePreset, applyPreset } from "../core/presets.js";
 import { getSchedule, setEntries, snooze } from "../core/schedule.js";
 import { powerDomain } from "../core/power.js";
+import { setGroupTarget, saveGroups, noteManual, noteEpsManual, dismissAlert, knownGroup } from "../core/groups.js";
 import {
   toSetupState, applySetup, applyAppSettings, getConfig, isSettingsLocked, exportConfig,
   importConfig, getDataDir,
@@ -114,15 +116,47 @@ export async function buildHttp() {
       return zoneOp(reply, req.params.id, req.params.zoneId, "recallPreset", p);
     },
   );
+  // A command on the device itself overrides its power groups until they next change —
+  // and means "turned on after it was switched off" isn't reported as a surprise.
+  const deviceType = (id: string) => store.get(id)?.type;
   app.post<{ Params: { id: string; zoneId: string }; Body: SetBlackoutBody }>(
     "/api/devices/:id/zones/:zoneId/blackout",
     { preHandler: requireAuth },
-    (req, reply) => zoneOp(reply, req.params.id, req.params.zoneId, "setBlackout", Boolean(req.body?.blackout)),
+    (req, reply) => {
+      const on = Boolean(req.body?.blackout);
+      noteManual(req.params.id, on ? "standby" : "on");
+      return zoneOp(reply, req.params.id, req.params.zoneId, "setBlackout", on);
+    },
   );
   app.post<{ Params: { id: string; zoneId: string }; Body: SetOnBody }>(
     "/api/devices/:id/zones/:zoneId/on",
     { preHandler: requireAuth },
-    (req, reply) => zoneOp(reply, req.params.id, req.params.zoneId, "setOn", Boolean(req.body?.on)),
+    (req, reply) => {
+      const on = Boolean(req.body?.on);
+      if (deviceType(req.params.id) === "exview") noteManual(req.params.id, on ? "on" : "standby");
+      return zoneOp(reply, req.params.id, req.params.zoneId, "setOn", on);
+    },
+  );
+  app.post<{ Params: { id: string; zoneId: string }; Body: SetPowerStateBody }>(
+    "/api/devices/:id/zones/:zoneId/power",
+    { preHandler: requireAuth },
+    async (req, reply) => {
+      const state = req.body?.state;
+      if (state !== "on" && state !== "blackout" && state !== "standby") {
+        return reply.code(400).send({ error: "state must be on | blackout | standby" });
+      }
+      const drv = getDriver(req.params.id);
+      if (!drv?.setPowerState) return reply.code(400).send({ error: "device has no power states" });
+      const zone = req.params.zoneId === "-" ? drv.zones()[0]?.id : req.params.zoneId;
+      if (!zone) return reply.code(400).send({ error: "no such zone" });
+      noteManual(req.params.id, state === "on" ? "on" : "standby");
+      try {
+        await drv.setPowerState(zone, state);
+        return { ok: true };
+      } catch (e) {
+        return fail(reply, 502, e);
+      }
+    },
   );
 
   app.post<{ Params: { id: string; name: string } }>(
@@ -131,6 +165,9 @@ export async function buildHttp() {
     async (req, reply) => {
       const drv = getDriver(req.params.id);
       if (!drv?.action) return reply.code(400).send({ error: "device has no actions" });
+      if (drv.type === "expromo-eps" && (req.params.name === "power_on" || req.params.name === "power_off")) {
+        noteEpsManual(req.params.id, req.params.name === "power_on");
+      }
       try {
         return { ok: true, result: await drv.action(req.params.name) };
       } catch (e) {
@@ -146,13 +183,46 @@ export async function buildHttp() {
     { preHandler: requireAuth },
     async (req, reply) => {
       try {
-        await powerDomain(req.params.target, req.params.onoff === "on");
+        await powerDomain(req.params.target, req.params.onoff === "on", "API");
         return { ok: true };
       } catch (e) {
         return fail(reply, 502, e);
       }
     },
   );
+
+  /* ---- power groups ---- */
+
+  app.get("/api/groups", { preHandler: requireAuth }, async () => ({
+    config: getConfig().groups,
+    groups: store.snapshot().groups,
+  }));
+  app.put<{ Body: SaveGroupsBody }>("/api/groups", { preHandler: requireAuth }, async (req, reply) => {
+    if (!Array.isArray(req.body?.groups)) return reply.code(400).send({ error: "groups[] required" });
+    try {
+      return { ok: true, groups: saveGroups(req.body.groups) };
+    } catch (e) {
+      return fail(reply, 400, e);
+    }
+  });
+  app.post<{ Params: { id: string }; Body: SetGroupStateBody & { by?: string } }>(
+    "/api/groups/:id/state",
+    { preHandler: requireAuth },
+    async (req, reply) => {
+      const state = req.body?.state as PowerTarget;
+      if (state !== "on" && state !== "standby" && state !== "off") {
+        return reply.code(400).send({ error: "state must be on | standby | off" });
+      }
+      if (!knownGroup(req.params.id)) return reply.code(404).send({ error: `no power group "${req.params.id}"` });
+      await setGroupTarget(req.params.id, state, String(req.body?.by || "Dashboard").slice(0, 40));
+      return { ok: true };
+    },
+  );
+
+  app.post<{ Params: { id: string } }>("/api/alerts/:id/dismiss", { preHandler: requireAuth }, async (req) => {
+    dismissAlert(req.params.id);
+    return { ok: true };
+  });
 
   /* ---- presets ---- */
 

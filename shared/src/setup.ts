@@ -23,6 +23,9 @@ export interface SetupEpsOutput {
   label: string;
   /** 1-based physical relay number (1-6 on the 6CH box) */
   index: number;
+  /** never switched off by whole-unit power off, groups or schedules (network switch,
+   *  the control PC…). Its own on/off button still works. */
+  protected?: boolean;
 }
 
 /** One device as the wizard edits it — a flattened superset of every device type's config. */
@@ -34,6 +37,8 @@ export interface SetupDevice {
   host: string;
   port: number;
   poweredBy?: string | null;
+  /** 1-6, or null/undefined for "whole unit" */
+  poweredByOutput?: number | null;
   /** H-series */
   pId?: string;
   secretKey?: string; // may be SECRET_KEPT

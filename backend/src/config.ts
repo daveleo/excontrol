@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync } from "
 import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
 import type {
-  DeviceType, AppPreset, Schedule, SetupDevice, SetupState, SetupSaveBody, AppSettingsBody,
+  DeviceType, AppPreset, Schedule, SetupDevice, SetupState, SetupSaveBody, AppSettingsBody, GroupConfig,
 } from "@excontrol/shared";
 import { BRAND, SECRET_KEPT } from "@excontrol/shared";
 import { log } from "./logger.js";
@@ -43,6 +43,9 @@ export interface BaseDeviceConfig {
   pollMs?: number;
   /** id of the EPS that powers this device (null = always on). */
   poweredBy?: string | null;
+  /** the relay (1-6) of that EPS this device hangs off; null = the whole unit (every output
+   *  no other device claims). */
+  poweredByOutput?: number | null;
 }
 
 export interface HConfig extends BaseDeviceConfig {
@@ -64,6 +67,8 @@ export interface EpsOutputConfig {
   label: string;
   /** 1-based physical relay number, matches OUTx_ON/OFF. */
   index: number;
+  /** never switched off by whole-unit power off, groups or schedules */
+  protected?: boolean;
 }
 
 export interface EpsConfig extends BaseDeviceConfig {
@@ -71,6 +76,8 @@ export interface EpsConfig extends BaseDeviceConfig {
   /** off by default; the whole-unit Power on/off button is unaffected either way. */
   independentOutputs?: boolean;
   outputs?: EpsOutputConfig[];
+  /** minimum time an output stays off before eXcontrol switches it back on (default 30) */
+  minOffSeconds?: number;
 }
 
 export interface ObsConfig extends BaseDeviceConfig {
@@ -101,6 +108,7 @@ export interface AppConfig {
   devices: DeviceConfig[];
   presets: AppPreset[];
   schedule: Schedule;
+  groups: GroupConfig[];
 }
 
 const EMPTY_CONFIG: AppConfig = {
@@ -108,6 +116,7 @@ const EMPTY_CONFIG: AppConfig = {
   devices: [],
   presets: [],
   schedule: { entries: [] },
+  groups: [],
 };
 
 /* ---------- load / save ---------- */
@@ -173,6 +182,7 @@ function normalise(p: Partial<AppConfig>): AppConfig {
     devices: Array.isArray(p.devices) ? (p.devices as DeviceConfig[]) : [],
     presets: Array.isArray(p.presets) ? p.presets : [],
     schedule: p.schedule && Array.isArray(p.schedule.entries) ? p.schedule : { entries: [] },
+    groups: Array.isArray(p.groups) ? p.groups : [],
   };
 }
 
@@ -201,6 +211,7 @@ function toSetupDevice(d: DeviceConfig): SetupDevice {
     host: d.host,
     port: d.port,
     poweredBy: d.poweredBy ?? null,
+    poweredByOutput: d.poweredByOutput ?? null,
   };
   if (d.type === "novastar-h") {
     base.pId = d.pId;
@@ -252,6 +263,8 @@ function fromSetupDevice(input: SetupDevice): DeviceConfig {
     host,
     port,
     poweredBy: d.poweredBy || null,
+    poweredByOutput: d.poweredBy && Number(d.poweredByOutput) >= 1 && Number(d.poweredByOutput) <= 6
+      ? Number(d.poweredByOutput) : null,
   };
   switch (d.type) {
     case "novastar-h":
@@ -269,6 +282,11 @@ function fromSetupDevice(input: SetupDevice): DeviceConfig {
         ...common, type: "expromo-eps",
         independentOutputs: !!d.independentOutputs,
         outputs: cleanOutputs(d.outputs),
+        // not edited in the wizard — carried over so a wizard save doesn't reset it
+        ...(() => {
+          const stored = current.devices.find((x) => x.id === common.id);
+          return stored?.type === "expromo-eps" && stored.minOffSeconds != null ? { minOffSeconds: stored.minOffSeconds } : {};
+        })(),
       };
     case "obs":
       return { ...common, type: "obs", password: d.password || "" };
@@ -295,6 +313,7 @@ function cleanOutputs(outputs: SetupDevice["outputs"]): EpsOutputConfig[] {
       id: String(o.id).trim(),
       label: (o.label || "").trim() || String(o.id).trim(),
       index: Number(o.index) || 0,
+      ...(o.protected ? { protected: true } : {}),
     }))
     .filter((o) => o.index >= 1 && o.index <= 6);
 }
@@ -323,7 +342,11 @@ export function applySetup(body: SetupSaveBody): AppConfig {
     devices: body.devices.map(fromSetupDevice),
     presets: current.presets,
     schedule: current.schedule,
+    groups: current.groups,
   };
+  // a removed device drops out of every group rather than failing validation
+  const ids = new Set(next.devices.map((d) => d.id));
+  next.groups = next.groups.map((g) => ({ ...g, members: g.members.filter((m) => ids.has(m)) }));
   return saveConfig(next); // saveConfig runs validate(), incl. the port range check
 }
 
@@ -397,6 +420,7 @@ function validate(cfg: AppConfig): void {
       }
     }
   }
+  const claimed = new Map<string, string>();
   for (const d of cfg.devices) {
     if (d.poweredBy) {
       const eps = cfg.devices.find((x) => x.id === d.poweredBy);
@@ -404,5 +428,23 @@ function validate(cfg: AppConfig): void {
         throw new Error(`config: device "${d.id}".poweredBy "${d.poweredBy}" is not an EPS`);
       }
     }
+    if (d.poweredByOutput != null) {
+      if (!d.poweredBy) throw new Error(`config: device "${d.id}" has an output but no EPS`);
+      if (!Number.isInteger(d.poweredByOutput) || d.poweredByOutput < 1 || d.poweredByOutput > 6) {
+        throw new Error(`config: device "${d.id}".poweredByOutput must be 1-6`);
+      }
+      const key = `${d.poweredBy}:${d.poweredByOutput}`;
+      const other = claimed.get(key);
+      if (other) throw new Error(`config: "${d.id}" and "${other}" are both on output ${d.poweredByOutput} of "${d.poweredBy}"`);
+      claimed.set(key, d.id);
+    }
+  }
+  const gids = new Set<string>();
+  for (const g of cfg.groups ?? []) {
+    if (!g.id || !/^[a-z0-9][a-z0-9-]*$/i.test(g.id)) throw new Error(`config: group id "${g.id}" — use letters, digits and hyphens`);
+    if (g.id === "all") throw new Error(`config: "all" is reserved for Everything`);
+    if (gids.has(g.id)) throw new Error(`config: duplicate group id "${g.id}"`);
+    gids.add(g.id);
+    for (const m of g.members) if (!ids.has(m)) throw new Error(`config: group "${g.id}" names unknown device "${m}"`);
   }
 }

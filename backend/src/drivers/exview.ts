@@ -3,6 +3,7 @@ import { BaseDriver } from "./types.js";
 import type { ExviewConfig } from "../config.js";
 import type { Preset, ProbeResult } from "@excontrol/shared";
 import { netReason } from "../setup/neterr.js";
+import { store } from "../core/state.js";
 
 /**
  * Expromo eXview Edge/AIO — UDP control protocol, port 8600. Frame shape (validated against
@@ -82,6 +83,7 @@ const CODE = {
   QUERY_SCREEN_STATUS: "C005", // -> C006, data[0]: 0x80 awake, 0x00 blackout
   QUERY_TRUE_STANDBY: "C020", // -> C021, data[0]: 1 often means Standby, but see resolvePowerState — not trustworthy alone
   SET_POWER: "C003", // -> C004, data[0] echoes what was sent (0x5E on / 0x5F blackout) — not a status word
+  STANDBY: "C007", // -> C008, no data. Deep Standby directly (what a long Blackout reaches on its own)
   QUERY_VOLUME: "C201", // -> C202, data[0] 0-100
   SET_VOLUME: "C203", // -> C204 ack(status)
   QUERY_BRIGHTNESS: "C21D", // -> C21E, data[0] 0-100
@@ -184,6 +186,9 @@ export class ExviewDriver extends BaseDriver {
    *  resolves again — distinguishes "unreachable because we just told it to reboot" from
    *  "unreachable because a prolonged Blackout is auto-escalating into Standby on its own". */
   private awaitingWake = false;
+  /** Set right after we send 0xC007 — the unit goes silent for ~20 s while it reboots into
+   *  Standby, and that silence is expected, not a fault. */
+  private awaitingStandby = false;
 
   constructor(cfg: ExviewConfig) {
     super(cfg);
@@ -253,15 +258,26 @@ export class ExviewDriver extends BaseDriver {
     const { state } = await this.resolvePowerState();
 
     if (state === "unreachable") {
+      // Its EPS output is off: silence is simply "no mains", not a transition. Forget the last
+      // state — after mains returns it boots into whatever it likes, and the next setOn(true)
+      // should use the wake path that works from anything.
+      if (store.powerOf(this.id) === "off") {
+        this.lastPowerState = "unknown";
+        this.awaitingWake = false;
+        this.awaitingStandby = false;
+        this.unreachableSince = null;
+        this.clearLiveReadings();
+        throw new Error("eXview: no mains (its EPS output is off)");
+      }
       const now = Date.now();
       if (this.unreachableSince == null) this.unreachableSince = now;
       const elapsed = now - this.unreachableSince;
       const expectingTransition =
-        this.awaitingWake || this.lastPowerState === "blackout" || this.lastPowerState === "standby";
+        this.awaitingWake || this.awaitingStandby || this.lastPowerState === "blackout" || this.lastPowerState === "standby";
 
       if (expectingTransition && elapsed < UNREACHABLE_GRACE_MS) {
         this.clearLiveReadings();
-        const waking = this.awaitingWake || this.lastPowerState === "standby";
+        const waking = this.awaitingWake || (this.lastPowerState === "standby" && !this.awaitingStandby);
         this.initializing(waking ? "waking up from standby" : "switching to standby");
         return;
       }
@@ -272,6 +288,8 @@ export class ExviewDriver extends BaseDriver {
 
     this.unreachableSince = null;
     this.awaitingWake = false;
+    // a unit still answering "on"/"blackout" right after 0xC007 hasn't started its reboot yet
+    if (state === "standby" || state === "unknown") this.awaitingStandby = false;
     this.lastPowerState = state;
 
     if (state === "standby" || state === "unknown") {
@@ -299,6 +317,20 @@ export class ExviewDriver extends BaseDriver {
       presets: this.presetsWithSignal(hdmiReply.data),
     });
     this.online();
+  }
+
+  /** On / Blackout / Standby. Standby is the deep one (0xC007): the unit reboots its LED
+   *  power into a restricted low-power mode that only the wake packet brings back from. */
+  async setPowerState(zoneId: string, state: "on" | "blackout" | "standby"): Promise<void> {
+    if (state === "on") return this.setOn(zoneId, true);
+    if (state === "blackout") return this.setOn(zoneId, false);
+    if (this.lastPowerState === "standby") return; // already there — a second 0xC007 is pointless
+    this.awaitingStandby = true;
+    // It may ack with 0xC008, or already be busy rebooting — either way, the polls that
+    // follow are what confirm it; sendRaw doesn't insist on a reply.
+    await this.sendRaw(buildFrame(CODE.STANDBY, []));
+    this.clearLiveReadings();
+    this.patchZone(zoneId, { on: false });
   }
 
   async setOn(zoneId: string, on: boolean): Promise<void> {

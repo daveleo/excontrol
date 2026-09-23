@@ -31,7 +31,7 @@ const cfg = (): AppConfig => ({
     { id: "eps-off", type: "expromo-eps", label: "Disabled EPS", enabled: false, host: "127.0.0.1", port: 1 },
   ],
   presets: [],
-  schedule: { entries: [] },
+  schedule: { entries: [] }, groups: [],
 });
 
 describe("startDevices — disabled devices are hidden, not just marked offline", () => {
@@ -53,7 +53,7 @@ describe("startDevices — seeds from the on-disk device cache before anything i
       },
     ],
     presets: [],
-    schedule: { entries: [] },
+    schedule: { entries: [] }, groups: [],
   });
 
   it("shows last-known brightness/presets immediately, before the device answers a single poll", async () => {

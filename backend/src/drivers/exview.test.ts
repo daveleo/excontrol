@@ -73,7 +73,7 @@ function fakeExview(state: FakeState): Promise<{
 function buildReply(reqCode: string, data: number[], state: FakeState): Buffer | null {
   const replyCode: Record<string, string> = {
     C005: "C006", C003: "C004", C201: "C202", C203: "C204", C21D: "C21E", C21F: "C220", C211: "C212", C213: "C214",
-    C25B: "C25C", C020: "C021",
+    C25B: "C25C", C020: "C021", C007: "C008",
   };
   const code = replyCode[reqCode]!;
   let replyData: number[];
@@ -90,6 +90,8 @@ function buildReply(reqCode: string, data: number[], state: FakeState): Buffer |
     case "C213": state.source = data[0]!; replyData = [1, 0]; break;
     case "C25B": replyData = [...state.hdmiSignal]; break;
     case "C020": replyData = [state.standby === "none" ? 0 : 1]; break;
+    // direct Standby: the real unit acks, then reboots into the restricted mode
+    case "C007": state.standby = "active"; state.on = false; replyData = []; break;
     default: replyData = [];
   }
   const codeHigh = parseInt(code.slice(0, 2), 16);
@@ -447,4 +449,34 @@ describe("eXview driver — probe", () => {
     const result = await ExviewDriver.probe({ ...cfg(0), port: 1 });
     expect(result.ok).toBe(false);
   }, 10000);
+});
+
+describe("eXview driver — direct Standby (0xC007)", () => {
+  it("sends exactly the documented 0xC007 frame", async () => {
+    // documented TX bytes, exview-aio-driver-wiki "Standby (Power Off State)"
+    const documented = "55 55 55 55 55 55 55 C0 01 03 01 D0 00 D1 07 C0 00 00 FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF 00 00 00 5C";
+    const got: Buffer[] = [];
+    const cap = createSocket("udp4");
+    sockets.push(cap);
+    cap.on("message", (m) => got.push(m));
+    await new Promise<void>((r) => cap.bind(0, "127.0.0.1", () => r()));
+    const drv = new ExviewDriver(cfg((cap.address() as { port: number }).port));
+    await drv.setPowerState("screen", "standby");
+    const hex = [...got[0]!].map((b) => b.toString(16).padStart(2, "0").toUpperCase()).join(" ");
+    expect(hex).toBe(documented);
+  });
+
+  it("setPowerState: standby puts the unit in Standby, the poll sees it, and on wakes it again", async () => {
+    const fake = await fakeExview(state({ on: true }));
+    sockets.push(fake.sock);
+    const drv = new ExviewDriver(cfg(fake.port));
+    await drv.start();
+    await settle();
+    await drv.setPowerState("screen", "standby");
+    await new Promise((r) => setTimeout(r, 5200)); // next poll cycle
+    expect(drv.zones()[0]?.powerState).toBe("standby");
+    await drv.setPowerState("screen", "on");
+    expect(fake.received).toContain("WAKE_PACKET");
+    await drv.stop();
+  }, 15000);
 });

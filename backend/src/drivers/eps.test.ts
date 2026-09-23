@@ -24,6 +24,7 @@ function fakeEps(initialBits: string): Promise<{ port: number; commands: string[
         } else if (cmd === "POWER_STATUS") {
           sock.end(`SYSTEM=ON;STATE=FULLY_ON;OUTPUTS=${bits.join("")};LABEL=Test\n`);
         } else if (cmd === "POWER_ON" || cmd === "POWER_OFF") {
+          bits.fill(cmd === "POWER_ON" ? "1" : "0");
           sock.end(`OK ${cmd}\n`);
         } else if (cmd === "PING") {
           sock.end("PONG\n");
@@ -51,6 +52,7 @@ async function waitFor(fn: () => boolean, tries = 40): Promise<void> {
 const baseCfg = (port: number, over: Partial<EpsConfig> = {}): EpsConfig => ({
   id: "eps", type: "expromo-eps", label: "EPS", enabled: true, host: "127.0.0.1", port,
   independentOutputs: true,
+  minOffSeconds: 0,
   outputs: [
     { id: "lights", label: "House lights", index: 1 },
     { id: "fog", label: "Fog", index: 3 },
@@ -91,12 +93,16 @@ describe("EPS independent output control", () => {
     expect(commands).toContain("OUT3_ON");
     expect(bits()[2]).toBe("1");
 
-    await drv.setOn("lights", false); // lights = output 1, already off — no-op command still sent
-    expect(commands).toContain("OUT1_OFF");
+    // lights = output 1, already off — the status read shows that, so nothing is sent
+    await drv.setOn("lights", false);
+    expect(commands).not.toContain("OUT1_OFF");
+    await drv.setOn("fog", false);
+    expect(commands).toContain("OUT3_OFF");
 
-    // The old whole-device power button is a completely separate code path — unaffected.
+    // The whole-device power button still works (full sequencing behaviour: eps-power.test.ts).
     const reply = await drv.action("power_on");
     expect(reply).toBe("OK POWER_ON");
+    expect(bits()).toBe("111111");
   });
 
   it("setOn rejects a zone id that isn't a configured output", async () => {

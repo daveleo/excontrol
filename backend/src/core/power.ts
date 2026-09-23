@@ -1,5 +1,5 @@
 import type { DeviceState, PowerDomain, PowerLevel } from "@excontrol/shared";
-import { ALWAYS_ON_DOMAIN } from "@excontrol/shared";
+import { ALWAYS_ON_DOMAIN, ALL_GROUP } from "@excontrol/shared";
 import { bus } from "./bus.js";
 import { store } from "./state.js";
 import { getConfig } from "../config.js";
@@ -37,6 +37,47 @@ function domainMembers(devices: DeviceState[], epsId: string): DeviceState[] {
   return devices.filter((d) => d.poweredBy === epsId && d.id !== epsId);
 }
 
+type PowerMember = Pick<DeviceState, "id" | "poweredByOutput">;
+
+/**
+ * Which relays each member of one EPS depends on. A member with poweredByOutput owns that
+ * one output; every other member shares "the rest" — all outputs nobody claimed. So the
+ * showroom's H9 + COEX (whole unit) and the eXview (output 3) can coexist on one box, and
+ * switching the eXview's output never touches the wall's.
+ */
+export function outputOwnership(members: PowerMember[]): {
+  claimed: Map<number, string>;
+  whole: string[];
+  rest: number[];
+} {
+  const claimed = new Map<number, string>();
+  const whole: string[] = [];
+  for (const m of members) {
+    if (m.poweredByOutput != null && m.poweredByOutput >= 1 && m.poweredByOutput <= 6) claimed.set(m.poweredByOutput, m.id);
+    else whole.push(m.id);
+  }
+  const rest = [1, 2, 3, 4, 5, 6].filter((i) => !claimed.has(i));
+  return { claimed, whole, rest };
+}
+
+/** The outputs one member depends on (1-based). */
+export function outputsOf(member: PowerMember, members: PowerMember[]): number[] {
+  if (member.poweredByOutput != null) return [member.poweredByOutput];
+  return outputOwnership(members).rest;
+}
+
+/** Is this member's own supply off, given the EPS's reported state? Pure — for tests. */
+export function memberSupplyOff(eps: DeviceState, member: PowerMember, members: PowerMember[]): boolean {
+  if (eps.status !== "online") return false; // unknown, not "off"
+  const sys = eps.extra?.system as string | undefined;
+  const state = eps.extra?.state as string | undefined;
+  if (state === "SEQUENCING") return false; // coming up
+  if (sys === "OFF") return true;
+  const bits = eps.extra?.outputs as string | undefined;
+  if (!bits || bits.length < 6) return false;
+  return outputsOf(member, members).every((i) => bits[i - 1] === "0");
+}
+
 export function computeEpsDomain(eps: DeviceState, members: DeviceState[], r: DomainRuntime): PowerDomain {
   const reachable = eps.status === "online";
   const sys = eps.extra?.system as string | undefined;
@@ -46,7 +87,10 @@ export function computeEpsDomain(eps: DeviceState, members: DeviceState[], r: Do
   if (sys === "ON" && outputs) [...outputs].forEach((c, i) => c === "0" && outputsOff.push(i + 1));
 
   const epsWrap = { system: sys, state, outputs, outputsOff, reachable };
-  const membersOnline = members.length === 0 || members.every((d) => d.status === "online");
+  // A member whose own output is switched off isn't expected online — don't wait for it,
+  // and don't call it "not responding".
+  const powered = members.filter((d) => !memberSupplyOff(eps, d, members));
+  const membersOnline = powered.every((d) => d.status === "online");
   // Give the controllers time to boot both after a power cycle AND when eXcontrol itself
   // starts up next to an already-on wall (control PC + wall powered on together).
   const grace = r.epsFirstOn > 0 && Date.now() - r.epsFirstOn < BOOT_GRACE_MS;
@@ -68,7 +112,7 @@ export function computeEpsDomain(eps: DeviceState, members: DeviceState[], r: Do
     headline = `${eps.label}: starting up…`;
     detail = "Power is sequencing on.";
   } else if (!membersOnline && grace) {
-    const waiting = members.filter((d) => d.status !== "online").map((d) => d.label).join(" and ");
+    const waiting = powered.filter((d) => d.status !== "online").map((d) => d.label).join(" and ");
     level = "starting";
     headline = `${eps.label}: starting up…`;
     detail = `Power is on — waiting for ${waiting || "the controllers"} to finish initializing.`;
@@ -88,6 +132,7 @@ export function computeEpsDomain(eps: DeviceState, members: DeviceState[], r: Do
     level,
     headline,
     detail,
+    partial: level === "on" && outputsOff.length > 0 && membersOnline,
     members: [eps.id, ...members.map((d) => d.id)],
     eps: epsWrap,
   };
@@ -101,6 +146,7 @@ function recompute(): void {
   const devices = store.all();
   const epsDevices = devices.filter((d) => d.type === "expromo-eps");
   const domains: PowerDomain[] = [];
+  const devicePower = new Map<string, PowerLevel>();
 
   for (const eps of epsDevices) {
     const r = runtime(eps.id);
@@ -111,6 +157,7 @@ function recompute(): void {
     const members = domainMembers(devices, eps.id);
     const dom = computeEpsDomain(eps, members, r);
     domains.push(dom);
+    for (const m of members) devicePower.set(m.id, memberSupplyOff(eps, m, members) ? "off" : dom.level);
 
     if (dom.level === "off") r.applyArmed = true;
     if (shouldFirePowerOn(r, dom.level, r.prevLevel)) {
@@ -132,6 +179,7 @@ function recompute(): void {
     });
   }
 
+  store.setDevicePower(devicePower);
   const changed = store.setDomains(domains);
   if (changed.length) bus.emit("broadcast", { t: "power", domains: store.domainsList() });
 }
@@ -174,19 +222,19 @@ export function recomputePower(): void {
   recompute();
 }
 
-/** Fire an EPS power command by domain (eps id) or "all". */
-export async function powerDomain(target: string, on: boolean): Promise<void> {
-  const cfg = getConfig();
-  const epsIds =
-    target === "all"
-      ? cfg.devices.filter((d) => d.type === "expromo-eps").map((d) => d.id)
-      : [target];
-  const cmd = on ? "power_on" : "power_off";
-  await Promise.all(
-    epsIds.map((id) => {
-      const drv = getDriver(id);
-      if (!drv?.action) throw new Error(`"${id}" is not a controllable EPS`);
-      return drv.action(cmd);
-    }),
-  );
+/** Whole-unit power for one EPS (the EPS card, Companion, a schedule entry targeting an EPS).
+ *  The driver makes it safe: switching on a partly-on unit only adds the missing outputs,
+ *  protected outputs are never switched off, and the result is verified. "all" goes through
+ *  the power engine instead (Everything, chained, screens included). */
+export async function powerDomain(target: string, on: boolean, setBy = "Manual"): Promise<void> {
+  if (target === "all") {
+    const { setGroupTarget } = await import("./groups.js");
+    await setGroupTarget(ALL_GROUP, on ? "on" : "off", setBy);
+    return;
+  }
+  const drv = getDriver(target);
+  if (!drv?.action || drv.type !== "expromo-eps") throw new Error(`"${target}" is not a controllable EPS`);
+  const { noteEpsManual } = await import("./groups.js");
+  noteEpsManual(target, on);
+  await drv.action(on ? "power_on" : "power_off");
 }

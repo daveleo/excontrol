@@ -3,6 +3,7 @@ import { log } from "./logger.js";
 import { startDevices, stopDevices } from "./core/registry.js";
 import { startPowerMonitor } from "./core/power.js";
 import { startScheduler } from "./core/schedule.js";
+import { startGroupEngine } from "./core/groups.js";
 import { buildHttp } from "./api/http.js";
 import { attachWs } from "./api/ws.js";
 import { registerHttpRestarter } from "./core/httpControl.js";
@@ -29,6 +30,7 @@ export async function startServer(): Promise<RunningServer> {
 
   await startDevices(cfg);
   startPowerMonitor();
+  startGroupEngine();
   const stopScheduler = startScheduler();
 
   let app: FastifyInstance = await buildHttp();
