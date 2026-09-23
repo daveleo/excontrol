@@ -471,6 +471,56 @@ instead, and that path exposed two problems Phase 11 didn't catch:
   muted hint under the power button, shown only while `powerState === "blackout"`: "Screen
   will go into standby mode after the pre-configured time."
 
+## Phase 13 — Power engine: groups, per-output EPS power, safe EPS commands (v0.3.0)  ✅
+
+Driven by an AV-architect review of v0.2.8's power logic plus live measurements on a spare
+EPS unit (firmware v2.2) in the showroom. The review and the venue-scale proposal this
+implements the first slice of are summarised here; the full write-ups were shared separately.
+
+- **Measured EPS facts the code is now built around**: POWER_ON = 1 s start delay, then one
+  relay every ~303 ms (FULLY_ON at ~2.6 s); POWER_OFF drops all six at once (zero-cross SSRs,
+  so no inrush on switch-off). POWER_ON on a *partly-on* unit switches everything off first
+  and re-sequences — running equipment loses power for ~1 s. An OUTx command during a
+  sequence aborts it. OUTx commands have no spacing of their own. And **two TCP connections
+  at once make the unit drop commands** (4 of 6 lost when sent in parallel; 3 of 10 lost when
+  colliding with a status poll, after which the unit ignored everything for ~10 s).
+- **EPS driver**: every connection goes through one queue; polls step aside while a command
+  is pending; every command is verified by reading the status back and retried (repeating is
+  harmless); POWER_ON only from fully off, otherwise just the missing outputs, 300 ms apart;
+  relay commands wait out a running sequence; protected outputs (`outputs[].protected`) are
+  never switched off by power-off/groups/schedules; a 30 s minimum off-time
+  (`minOffSeconds`) before an output is switched back on; "offline" only after 3 missed polls.
+  Other controllers (Crestron, Q-SYS) may still talk to the unit directly — the retry is what
+  keeps a collision with them from losing a command.
+- **Per-output power**: `poweredByOutput` (1-6) puts a device on one relay; "whole unit"
+  devices share every relay nobody claims. "Powered down" is now worked out per device
+  (its own relay off), so a device on an output that's off no longer reads as Offline.
+- **Power groups** (`config.groups`, toolbar → Groups): On / Standby / Off per group, plus the
+  built-in **Everything**. Everything passes its target down; a device in several groups
+  follows the **highest** target (on > standby > off); a command on the device's own card
+  overrides until its groups next change. A relay goes off only when everything on it is
+  Off — a device whose relay is still needed is blacked out / put in standby instead, and its
+  card says so. EPS-fed devices: the EPS decides (Off = relay off). Socket-fed eXviews: Off =
+  Standby (0xC007). NovaStar on a socket: blackout.
+- **Execution order**: soft-off (standby/blackout) → switch-offs (units in reverse order) →
+  switch-ons one unit at a time with a 1 s gap (one inrush at a time) → wait for equipment →
+  wake screens (staggered 2 s). Progress shows on the group cards.
+- **Drift is reported, not fought**: a device that turns on after it was set Off/Standby
+  raises a pop-up ("… turned On after it was set to Off (Schedule: Power off, 17:00)").
+- **eXview**: direct Standby (0xC007, bytes match the protocol reference) and a three-way
+  On / Blackout / Standby control on its card.
+- **Scheduler**: targets Everything, a group, or one EPS; new Standby action. **Fixed**:
+  extending a shutdown used to hold back *every* shutdown and then fire power-off to *all*
+  units; it now holds back and fires only the extended entry. The countdown and 15-minute
+  warning name what will switch off.
+- API: `POST /api/groups/:id/state`, `GET|PUT /api/groups`,
+  `POST /api/devices/:id/zones/:zone/power`, `POST /api/alerts/:id/dismiss`.
+  `/api/power/all/on|off` now means Everything.
+- Tests: 199 (new: fake EPS modelled on the measured firmware quirks, engine resolution and
+  planning, end-to-end engine runs, 0xC007 frame, per-entry extension).
+- **Not yet**: nested groups, per-surface scoping, exception dates / catch-up, Companion
+  group actions, feeds (per-circuit parallel start — today all units are chained).
+
 ## Known gaps / decisions pending
 
 - Default Electron icon everywhere (taskbar, tray, installer) — needs artwork.
@@ -478,7 +528,7 @@ instead, and that path exposed two problems Phase 11 didn't catch:
   slower and noisier than scoping to real LANs only).
 - TLS: deliberately not done — plain HTTP on a trusted LAN, per the network-model note in
   the README.
-- Multi-EPS: covered by simulation tests, never run on real multi-unit hardware.
+- Multi-EPS: chained start-up is simulation-tested; real two-unit test pending (showroom).
 - Independent output control: verified against one real EPS unit; multiple EPS units each
   with independent outputs enabled is simulation-tested only.
 
