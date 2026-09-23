@@ -1,20 +1,22 @@
 import { useCallback, useEffect, useState } from "react";
 import { useShowroom } from "./useShowroom.js";
 import { DeviceCard } from "./components/DeviceCard.js";
-import { PowerBanner } from "./components/PowerBanner.js";
-import { PresetsPanel } from "./components/PresetsPanel.js";
+import { PowerBar } from "./components/PowerBar.js";
+import { GroupRows } from "./components/PowerGroups.js";
+import { ScenesStrip } from "./components/ScenesStrip.js";
+import { PowerStrip } from "./components/PowerStrip.js";
 import { SchedulerPanel } from "./components/SchedulerPanel.js";
-import { ScheduleCard } from "./components/ScheduleCard.js";
 import { ShutdownModal } from "./components/ShutdownModal.js";
-import { PowerGroups } from "./components/PowerGroups.js";
-import { GroupsPanel } from "./components/GroupsPanel.js";
-import { AlertPopup } from "./components/AlertPopup.js";
 import { SetupWizardLoader } from "./components/SetupWizard.js";
-import { SettingsPanel } from "./components/SettingsPanel.js";
+import { SetupHub } from "./components/SetupHub.js";
+import { AlertPopup } from "./components/AlertPopup.js";
 import { UnlockModal } from "./components/UnlockModal.js";
 import { UpdateBanner } from "./components/UpdateBanner.js";
 import { ThemeToggle } from "./components/ThemeToggle.js";
 import { AccessGate } from "./components/AccessGate.js";
+import { BRAND } from "@excontrol/shared";
+import { isDisplay } from "./lib/status.js";
+import { useNarrow } from "./lib/useNarrow.js";
 import { authStatus, verifyToken } from "./api.js";
 import { ensureUnlocked } from "./lib/unlock.js";
 
@@ -66,85 +68,47 @@ export function App() {
 
 function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
   const { state, connected, toasts, dismiss } = useShowroom(onUnauthorized);
-  const [panel, setPanel] = useState<null | "presets" | "schedule" | "devices" | "settings" | "groups">(null);
+  const [panel, setPanel] = useState<null | "schedule" | "setup">(null);
+  const narrow = useNarrow();
 
   const scheduleCount = state?.schedule.entries.filter((e) => e.enabled).length ?? 0;
-  const domainLevel = (deviceId: string) =>
-    state?.powerDomains.find((d) => d.members.includes(deviceId))?.level;
-
   const firstRun = !!state && !state.app.configured;
   const locked = state?.app.settingsLocked ?? false;
-  const epsOff = new Set(
-    (state?.powerDomains ?? []).filter((d) => d.level === "off").map((d) => d.id),
-  );
+  const epsOff = new Set((state?.powerDomains ?? []).filter((d) => d.level === "off").map((d) => d.id));
 
-  const openDevices = async () => {
-    if (panel === "devices") return setPanel(null);
+  const openSetup = async () => {
+    if (panel === "setup") return setPanel(null);
     if (!(await ensureUnlocked(locked, verifyToken))) return;
-    setPanel("devices");
+    setPanel("setup");
   };
 
-  const openSettings = async () => {
-    if (panel === "settings") return setPanel(null);
-    if (!(await ensureUnlocked(locked, verifyToken))) return;
-    setPanel("settings");
-  };
+  const target = (id: string) => state?.deviceTargets?.find((t) => t.deviceId === id);
+  const displays = state?.devices.filter(isDisplay) ?? [];
+  const sources = state?.devices.filter((d) => !isDisplay(d) && d.type !== "expromo-eps") ?? [];
 
   return (
     <div className="app">
       <header className="topbar">
         <div className="brand">
           <span className="dot" data-on={connected} title={connected ? "connected" : "reconnecting…"} />
-          {state?.app.name ?? "eXcontrol"}
+          {BRAND.name}
         </div>
         <div className="toolbar">
-          <button className="icon-text-btn" title="Devices" disabled={!state} onClick={openDevices}>
-            <DevicesIcon />
-            <span className="btn-label">Devices</span>
-          </button>
-          <button
-            className="icon-text-btn"
-            title="Presets"
-            disabled={!state || firstRun}
-            onClick={() => setPanel(panel === "presets" ? null : "presets")}
-          >
-            <PresetsIcon />
-            <span className="btn-label">Presets</span>
-          </button>
-          <button
-            className="icon-text-btn"
-            title="Power groups"
-            disabled={!state || firstRun}
-            onClick={() => setPanel(panel === "groups" ? null : "groups")}
-          >
-            <GroupsIcon />
-            <span className="btn-label">Groups</span>
-          </button>
-          <button
-            className="icon-text-btn"
-            title="Scheduler"
-            disabled={firstRun}
-            onClick={() => setPanel(panel === "schedule" ? null : "schedule")}
-          >
+          <button className="icon-text-btn" title="Schedule" disabled={!state || firstRun} onClick={() => setPanel(panel === "schedule" ? null : "schedule")}>
             <ClockIcon />
-            <span className="btn-label">Scheduler</span>
+            <span className="btn-label">Schedule</span>
             {scheduleCount > 0 && <span className="badge">{scheduleCount}</span>}
           </button>
-          <button
-            className="icon-btn"
-            title="Settings"
-            aria-label="Settings"
-            disabled={!state}
-            onClick={() => void openSettings()}
-          >
+          <button className="icon-text-btn" title="Setup" disabled={!state} onClick={() => void openSetup()}>
             <GearIcon />
+            <span className="btn-label">Setup</span>
           </button>
-          {state && <span className="build">v{state.app.version}</span>}
           <ThemeToggle />
         </div>
       </header>
 
       {!state && <p className="loading">Connecting…</p>}
+      {state && !connected && <div className="reconnect">Reconnecting to eXcontrol…</div>}
 
       {state?.updateInfo && <UpdateBanner info={state.updateInfo} />}
 
@@ -152,35 +116,23 @@ function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
 
       {state && !firstRun && (
         <>
-          <PowerBanner domains={state.powerDomains} />
-
-          <PowerGroups state={state} />
+          <PowerBar state={state} />
+          <GroupRows state={state} />
+          <ScenesStrip state={state} />
 
           <main className="grid">
-            {state.devices.map((d) => (
-              <DeviceCard
-                key={d.id}
-                device={d}
-                powerLevel={domainLevel(d.id)}
-                target={state.deviceTargets?.find((t) => t.deviceId === d.id)}
-                allDevices={state.devices}
-              />
-            ))}
-            {(state.schedule.entries.length > 0 || scheduleCount > 0) && (
-              <ScheduleCard schedule={state.schedule} state={state} />
-            )}
+            {displays.map((d) => <DeviceCard key={d.id} device={d} target={target(d.id)} narrow={narrow} />)}
+            {sources.map((d) => <DeviceCard key={d.id} device={d} target={target(d.id)} narrow={narrow} />)}
           </main>
 
+          <PowerStrip state={state} />
+
           <ShutdownModal schedule={state.schedule} state={state} />
-          {panel === "presets" && <PresetsPanel state={state} onClose={() => setPanel(null)} />}
           {panel === "schedule" && <SchedulerPanel state={state} onClose={() => setPanel(null)} />}
-          {panel === "settings" && <SettingsPanel onClose={() => setPanel(null)} />}
-          {panel === "groups" && <GroupsPanel state={state} onClose={() => setPanel(null)} />}
+          {panel === "setup" && <SetupHub state={state} epsOff={epsOff} onClose={() => setPanel(null)} />}
           <AlertPopup alerts={state.alerts ?? []} />
         </>
       )}
-
-      {state && !firstRun && panel === "devices" && <SetupWizardLoader onClose={() => setPanel(null)} epsOff={epsOff} />}
 
       <UnlockModal />
 
@@ -195,33 +147,8 @@ function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
   );
 }
 
-function DevicesIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <rect x="3" y="4" width="18" height="5" rx="1.5" />
-      <rect x="3" y="15" width="18" height="5" rx="1.5" />
-      <circle cx="7" cy="6.5" r="0.5" fill="currentColor" stroke="none" />
-      <circle cx="7" cy="17.5" r="0.5" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
 
-function GroupsIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M12 3v6" strokeLinecap="round" />
-      <path d="M7.5 6.2a7 7 0 1 0 9 0" strokeLinecap="round" />
-    </svg>
-  );
-}
 
-function PresetsIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M7 3.5h10a1 1 0 0 1 1 1V21l-6-4-6 4V4.5a1 1 0 0 1 1-1Z" strokeLinejoin="round" />
-    </svg>
-  );
-}
 
 function ClockIcon() {
   return (

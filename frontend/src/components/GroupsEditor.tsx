@@ -1,6 +1,5 @@
 import { useState } from "react";
 import type { AppState, GroupConfig, DeviceState } from "@excontrol/shared";
-import { Modal } from "./Modal.js";
 import { saveGroups, verifyToken } from "../api.js";
 import { ensureUnlocked } from "../lib/unlock.js";
 
@@ -22,7 +21,8 @@ function powerNote(d: DeviceState, state: AppState): string {
   return `${eps}${d.poweredByOutput ? ` · output ${d.poweredByOutput}` : " · whole unit"}`;
 }
 
-export function GroupsPanel({ state, onClose }: { state: AppState; onClose: () => void }) {
+/** Setup › Groups. */
+export function GroupsEditor({ state }: { state: AppState }) {
   const initial: GroupConfig[] = (state.groups ?? [])
     .filter((g) => g.id !== "all")
     .map((g) => ({ id: g.id, label: g.label, members: [...g.members] }));
@@ -59,15 +59,15 @@ export function GroupsPanel({ state, onClose }: { state: AppState; onClose: () =
   };
 
   return (
-    <Modal title="Power groups" onClose={onClose}>
+    <>
       <p className="modal-lead">
-        A group is a set of screens and processors you switch together: On, Standby or Off.
-        A device can be in several groups — it then follows the <b>highest</b> of their targets
-        (On beats Standby beats Off), so switching one group off never cuts something another
-        group still wants on. <b>Everything</b> is built in and covers every device.
+        A group is a set of screens you switch together — On, Standby or Off — shown as a row
+        under the power bar. A screen can be in several groups; it then follows the <b>highest</b>
+        of them (On beats Standby beats Off), so switching one group off never cuts something
+        another group still wants on. The power bar itself always covers every device.
       </p>
 
-      {groups.length === 0 && <p className="hint muted">No groups yet — Everything still works on its own.</p>}
+      {groups.length === 0 && <p className="hint muted">No groups yet — the power bar still switches the whole room.</p>}
 
       {groups.map((g, i) => (
         <div key={g.id} className="grp-edit">
@@ -97,6 +97,6 @@ export function GroupsPanel({ state, onClose }: { state: AppState; onClose: () =
           {saved ? "Saved ✓" : saving ? "Saving…" : "Save"}
         </button>
       </div>
-    </Modal>
+    </>
   );
 }

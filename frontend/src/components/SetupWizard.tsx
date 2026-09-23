@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import type { DeviceType, SetupDevice, SetupState, SetupZone, SetupEpsOutput, ProbeResult, ScanHit } from "@excontrol/shared";
+import type { DeviceType, SetupDevice, SetupState, SetupZone, SetupEpsOutput, ProbeResult, ScanHit, DeviceState } from "@excontrol/shared";
+import { deviceStatus } from "../lib/status.js";
 import { getSetupState, probeDevice, scanNetwork, saveSetup } from "../api.js";
 
 const TYPE_LABEL: Record<DeviceType, string> = {
@@ -16,6 +17,13 @@ const TYPE_SHORT: Record<DeviceType, string> = {
   obs: "OBS",
   exview: "eXview",
 };
+const TYPE_BLURB: Record<DeviceType, string> = {
+  "novastar-h": "LED processor — brightness, presets, black",
+  "novastar-coex": "LED processor (MX40 Pro …)",
+  "expromo-eps": "Power sequencer, 6 outputs",
+  exview: "All-in-one LED display",
+  obs: "OBS Studio — scenes",
+};
 const HAS_ZONES = (t: DeviceType) => t === "novastar-h" || t === "novastar-coex";
 
 type ProbeCache = Record<string, { pending?: boolean; result?: ProbeResult }>;
@@ -24,13 +32,24 @@ export function SetupWizard({
   initial,
   onClose,
   epsOff = new Set(),
+  embedded = false,
+  live = [],
+  onDirty,
 }: {
   initial: SetupState;
   onClose: () => void;
   /** ids of EPS devices currently powered off — a failed Test on their equipment is expected */
   epsOff?: Set<string>;
+  /** inside Setup: no full-screen chrome of its own, a save bar only when something changed */
+  embedded?: boolean;
+  /** live device state, for the status dot on each row */
+  live?: DeviceState[];
+  /** tells the host whether there are unsaved changes (Setup asks before leaving) */
+  onDirty?: (dirty: boolean) => void;
 }) {
   const [devices, setDevices] = useState<SetupDevice[]>(initial.devices);
+  const [base, setBase] = useState<SetupDevice[]>(initial.devices);
+  const [justAdded, setJustAdded] = useState<string | null>(null);
   const [probes, setProbes] = useState<ProbeCache>({});
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState<string | null>(null);
@@ -85,6 +104,7 @@ export function SetupWizard({
         ...(type === "obs" ? { password: "", host: host || "127.0.0.1" } : {}),
         ...(type === "exview" ? { model: "edge" as const } : {}),
       };
+      setJustAdded(id);
       return [...ds, d];
     });
   };
@@ -118,9 +138,10 @@ export function SetupWizard({
   };
 
   const dirty = useMemo(
-    () => JSON.stringify(devices) !== JSON.stringify(initial.devices),
-    [devices, initial],
+    () => JSON.stringify(devices) !== JSON.stringify(base),
+    [devices, base],
   );
+  useEffect(() => { onDirty?.(dirty); }, [dirty, onDirty]);
   const close = () => {
     if (dirty && !confirm("Discard your changes to the device setup?")) return;
     onClose();
@@ -139,6 +160,10 @@ export function SetupWizard({
         setReconnecting(res.port);
         followToPort(res.port);
         return; // don't close — we're about to navigate away
+      }
+      if (embedded) {
+        setBase(devices);
+        return;
       }
       onClose();
     } catch (e) {
@@ -174,6 +199,48 @@ export function SetupWizard({
     );
   }
 
+  const rows = (
+    <div className="wiz-devices">
+      {devices.length === 0 && <p className="muted">No devices yet — add one below.</p>}
+      {devices.map((d, idx) => (
+        <DeviceForm
+          key={idx}
+          d={d}
+          startOpen={d.id === justAdded}
+          live={live.find((x) => x.id === d.id)}
+          epsDevices={epsDevices}
+          probe={probes[d.id]}
+          onChange={(patch) => mutate(idx, patch)}
+          onRemove={() => removeDevice(idx)}
+          onTest={() => runProbe(idx)}
+          defaultPort={defaultPort(d.type)}
+          powerOff={!!d.poweredBy && epsOff.has(d.poweredBy)}
+        />
+      ))}
+    </div>
+  );
+  const adder = <AddDevice onAdd={addDevice} scan={scan} onScan={runScan} knownHosts={knownHosts} />;
+
+  if (embedded) {
+    return (
+      <div className="setup-devices">
+        {rows}
+        {adder}
+        {(dirty || saveErr || idError) && (
+          <div className="setup-savebar">
+            {idError && <span className="probe-bad">{idError}</span>}
+            {saveErr && <span className="probe-bad">{saveErr}</span>}
+            <div className="spacer" />
+            <button disabled={saving} onClick={() => { setDevices(base); setSaveErr(null); }}>Discard</button>
+            <button className="primary" disabled={saving || !!idError || devices.length === 0} onClick={save}>
+              {saving ? "Saving…" : "Save changes"}
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="wizard">
       <div className="wiz-scroll">
@@ -192,49 +259,8 @@ export function SetupWizard({
           )}
         </header>
 
-        <section className="wiz-scan">
-          <button className="primary" disabled={scan.running} onClick={runScan}>
-            {scan.running ? "Scanning the network…" : "Scan network for devices"}
-          </button>
-          {scan.subnets && <span className="muted small">Looked at {scan.subnets.map((s) => `${s}.0/24`).join(", ")}</span>}
-          {scan.err && <span className="probe-bad small">{scan.err}</span>}
-          {scan.hits && scan.hits.length === 0 && <span className="muted small">Nothing answered on the known control ports.</span>}
-          {scan.hits && scan.hits.length > 0 && (
-            <ul className="scan-hits">
-              {scan.hits.map((h) => {
-                const added = knownHosts.has(`${h.host}:${h.port}`);
-                return (
-                  <li key={`${h.host}:${h.port}`}>
-                    <code>{h.host}:{h.port}</code>
-                    <span className="muted">likely {TYPE_SHORT[h.guess]}</span>
-                    <button disabled={added} onClick={() => addDevice(h.guess, h.host)}>
-                      {added ? "added" : `Add as ${TYPE_SHORT[h.guess]}`}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
-
-        <div className="wiz-devices">
-          {devices.length === 0 && <p className="muted">No devices yet. Scan the network or add one below.</p>}
-          {devices.map((d, idx) => (
-            <DeviceForm
-              key={idx}
-              d={d}
-              epsDevices={epsDevices}
-              probe={probes[d.id]}
-              onChange={(patch) => mutate(idx, patch)}
-              onRemove={() => removeDevice(idx)}
-              onTest={() => runProbe(idx)}
-              defaultPort={defaultPort(d.type)}
-              powerOff={!!d.poweredBy && epsOff.has(d.poweredBy)}
-            />
-          ))}
-        </div>
-
-        <AddDevice onAdd={addDevice} />
+        {rows}
+        {adder}
       </div>
       </div>
 
@@ -253,24 +279,66 @@ export function SetupWizard({
   );
 }
 
-function AddDevice({ onAdd }: { onAdd: (t: DeviceType) => void }) {
-  const [type, setType] = useState<DeviceType>("novastar-h");
+function AddDevice({
+  onAdd, scan, onScan, knownHosts,
+}: {
+  onAdd: (t: DeviceType, host?: string) => void;
+  scan: { running: boolean; hits?: ScanHit[]; subnets?: string[]; err?: string };
+  onScan: () => void;
+  knownHosts: Set<string>;
+}) {
+  const [open, setOpen] = useState(false);
+  if (!open) {
+    return (
+      <div className="add-dev">
+        <button className="add-dev-btn" onClick={() => setOpen(true)}>+ Add device</button>
+      </div>
+    );
+  }
   return (
-    <div className="wiz-add">
-      <select value={type} onChange={(e) => setType(e.target.value as DeviceType)}>
+    <div className="add-dev open">
+      <div className="add-dev-head">
+        <b>Add a device</b>
+        <button className="icon-btn" aria-label="Close" onClick={() => setOpen(false)}>✕</button>
+      </div>
+      <div className="add-tiles">
         {(Object.keys(TYPE_LABEL) as DeviceType[]).map((t) => (
-          <option key={t} value={t}>{TYPE_LABEL[t]}</option>
+          <button key={t} className="add-tile" onClick={() => { onAdd(t); setOpen(false); }}>
+            <b>{TYPE_LABEL[t].replace(/ \(.*/, "")}</b>
+            <span className="muted small">{TYPE_BLURB[t]}</span>
+          </button>
         ))}
-      </select>
-      <button onClick={() => onAdd(type)}>+ Add device</button>
+      </div>
+      <div className="add-scan">
+        <button disabled={scan.running} onClick={onScan}>{scan.running ? "Looking on the network…" : "Find on network"}</button>
+        {scan.subnets && <span className="muted small">Looked at {scan.subnets.map((x) => `${x}.0/24`).join(", ")}</span>}
+        {scan.err && <span className="probe-bad small">{scan.err}</span>}
+        {scan.hits && scan.hits.length === 0 && <span className="muted small">Nothing answered on the known control ports.</span>}
+      </div>
+      {scan.hits && scan.hits.length > 0 && (
+        <ul className="scan-hits">
+          {scan.hits.map((h) => {
+            const added = knownHosts.has(`${h.host}:${h.port}`);
+            return (
+              <li key={`${h.host}:${h.port}`}>
+                <code>{h.host}:{h.port}</code>
+                <span className="muted">likely {TYPE_SHORT[h.guess]}</span>
+                <button disabled={added} onClick={() => onAdd(h.guess, h.host)}>{added ? "added" : `Add as ${TYPE_SHORT[h.guess]}`}</button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
 
 function DeviceForm({
-  d, epsDevices, probe, onChange, onRemove, onTest, defaultPort, powerOff,
+  d, epsDevices, probe, onChange, onRemove, onTest, defaultPort, powerOff, startOpen = false, live,
 }: {
   d: SetupDevice;
+  startOpen?: boolean;
+  live?: DeviceState;
   epsDevices: SetupDevice[];
   probe?: { pending?: boolean; result?: ProbeResult };
   onChange: (patch: Partial<SetupDevice>) => void;
@@ -282,7 +350,7 @@ function DeviceForm({
   const [showKeyHelp, setShowKeyHelp] = useState(false);
   // Collapsed by default so opening Devices gives an overview of everything configured,
   // not a wall of forms — expand one at a time to edit it.
-  const [collapsed, setCollapsed] = useState(true);
+  const [collapsed, setCollapsed] = useState(!startOpen);
   const zones = d.zones ?? [];
   const result = probe?.result;
 
@@ -311,33 +379,28 @@ function DeviceForm({
 
   return (
     <div className={`wiz-device ${d.enabled ? "" : "off"} ${collapsed ? "collapsed" : ""}`}>
-      <div className="wd-top">
-        <button
-          className="wd-toggle" onClick={() => setCollapsed((c) => !c)}
-          aria-label={collapsed ? "Expand" : "Collapse"} aria-expanded={!collapsed}
-        >
-          {collapsed ? "▸" : "▾"}
-        </button>
+      <button className="wd-row" onClick={() => setCollapsed((c) => !c)} aria-expanded={!collapsed}>
         <span className="wd-badge">{TYPE_SHORT[d.type]}</span>
-        <input
-          className="wd-label" value={d.label} placeholder="Friendly name"
-          onChange={(e) => onChange({ label: e.target.value })}
-        />
-        <label className="wd-id">
-          id
-          <input value={d.id} onChange={(e) => onChange({ id: e.target.value.trim() })} />
-        </label>
-        {collapsed && <span className="wd-summary muted small">{d.host || "no address"}:{d.port}</span>}
-        <label className="toggle">
-          <input type="checkbox" checked={d.enabled} onChange={(e) => onChange({ enabled: e.target.checked })} />
-          Enabled
-        </label>
-        <button className="wd-remove" onClick={onRemove} aria-label="Remove device">Remove</button>
-      </div>
+        <span className="wd-name">{d.label || <span className="muted">Unnamed</span>}</span>
+        <span className="wd-addr muted small">{d.host || "no address"}:{d.port}</span>
+        <span className="wd-power muted small">
+          {d.type === "expromo-eps" ? "" : d.poweredBy
+            ? `${epsDevices.find((e) => e.id === d.poweredBy)?.label ?? d.poweredBy}${d.poweredByOutput ? ` · out ${d.poweredByOutput}` : ""}`
+            : "own socket"}
+        </span>
+        <span className="wd-live small">
+          {!d.enabled ? <span className="muted">disabled</span> : live ? (() => { const st = deviceStatus(live); return <><span className={`sdot ${st.tone}`} aria-hidden />{st.word}</>; })() : <span className="muted">not saved</span>}
+        </span>
+        <span className="wd-chev" aria-hidden>{collapsed ? "Edit ›" : "Close"}</span>
+      </button>
 
       {!collapsed && (
       <>
       <div className="wd-grid">
+        <label className="field wide">
+          <span>Name</span>
+          <input value={d.label} placeholder="Friendly name" onChange={(e) => onChange({ label: e.target.value })} />
+        </label>
         <label className="field">
           <span>IP address</span>
           <input value={d.host} placeholder="172.22.40.10" onChange={(e) => onChange({ host: e.target.value.trim() })} />
@@ -509,6 +572,21 @@ function DeviceForm({
         </div>
       )}
 
+      <div className="wd-meta">
+        <label className="switch-row">
+          <label className="switch"><input type="checkbox" checked={d.enabled} onChange={(e) => onChange({ enabled: e.target.checked })} /><span /></label>
+          {d.enabled ? "Enabled" : "Disabled — hidden from the dashboard"}
+        </label>
+        <details className="wd-adv">
+          <summary>Advanced</summary>
+          <label className="field narrow">
+            <span>Internal id</span>
+            <input value={d.id} onChange={(e) => onChange({ id: e.target.value.trim() })} />
+          </label>
+          <span className="muted small">Used by the API, Companion and schedules. Change only if you know why.</span>
+        </details>
+        <button className="linkish danger" onClick={() => { if (confirm(`Remove ${d.label || "this device"}?`)) onRemove(); }}>Remove device</button>
+      </div>
       <div className="wd-test">
         <button onClick={onTest} disabled={probe?.pending}>
           {probe?.pending ? "Testing…" : "Test connection"}

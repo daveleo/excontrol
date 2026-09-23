@@ -1,47 +1,20 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { SetupState } from "@excontrol/shared";
-import { Modal } from "./Modal.js";
 import {
-  getSetupState, saveAppSettings, checkForUpdates, setSettingsPassword, login, verifyToken,
+  saveAppSettings, checkForUpdates, setSettingsPassword, login, verifyToken,
   exportConfig, importConfig, downloadDiagnostics,
 } from "../api.js";
 import { ensureUnlocked } from "../lib/unlock.js";
 
-/** Fetches the current app settings on demand and renders the panel. Separate from Devices
- *  — this is the machine-level stuff (name, port, autostart, access password, backup),
- *  not device configuration, and gets its own gear icon so it isn't buried in Devices. */
-export function SettingsPanel({ onClose }: { onClose: () => void }) {
-  const [state, setState] = useState<SetupState | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    getSetupState().then(setState).catch((e) => setErr(e instanceof Error ? e.message : String(e)));
-  }, []);
-
-  if (err) {
-    return (
-      <Modal title="Settings" onClose={onClose}>
-        <p className="probe-bad">{err}</p>
-      </Modal>
-    );
-  }
-  if (!state) {
-    return (
-      <Modal title="Settings" onClose={onClose}>
-        <p className="muted">Loading…</p>
-      </Modal>
-    );
-  }
-  return <SettingsForm initial={state} onClose={onClose} />;
-}
-
-function SettingsForm({ initial, onClose }: { initial: SetupState; onClose: () => void }) {
+/** Setup › System: the machine-level basics — name, port, autostart, updates, version. */
+export function SystemSection({ initial, version }: { initial: SetupState; version: string }) {
   const [name, setName] = useState(initial.app.name);
   const [httpPort, setHttpPort] = useState(initial.app.httpPort);
-  const [locked, setLocked] = useState(initial.settingsLocked);
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [saveErr, setSaveErr] = useState<string | null>(null);
   const [reconnecting, setReconnecting] = useState<number | null>(null);
+  const dirty = name !== initial.app.name || httpPort !== initial.app.httpPort;
 
   const save = async () => {
     setSaving(true);
@@ -51,9 +24,10 @@ function SettingsForm({ initial, onClose }: { initial: SetupState; onClose: () =
       if (res.portChanged) {
         setReconnecting(res.port);
         followToPort(res.port);
-        return; // don't close — we're about to navigate away
+        return;
       }
-      onClose();
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
     } catch (e) {
       setSaveErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -72,44 +46,36 @@ function SettingsForm({ initial, onClose }: { initial: SetupState; onClose: () =
     setTimeout(() => tryOnce(0), 500);
   };
 
-  if (reconnecting != null) {
-    return (
-      <Modal title="Settings" onClose={() => {}}>
-        <p className="loading">Saved. Reconnecting on port {reconnecting}…</p>
-      </Modal>
-    );
-  }
+  if (reconnecting != null) return <p className="loading">Saved. Reconnecting on port {reconnecting}…</p>;
 
   return (
-    <Modal title="Settings" onClose={onClose}>
+    <>
       <div className="wiz-app-grid">
         <label className="field">
-          <span>Display name</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} />
+          <span>Room name</span>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Showroom" />
         </label>
         <label className="field narrow">
           <span>Port</span>
           <input type="number" value={httpPort} onChange={(e) => setHttpPort(Number(e.target.value) || httpPort)} />
         </label>
         <p className="muted small wiz-app-note">
-          The control panel's address on this network, e.g. <code>http://&lt;this-PC&apos;s-IP&gt;:{httpPort}</code>.
-          Changing the port reconnects everyone automatically.
+          The room name heads the dashboard and the power bar ("Turn off Showroom"). The control
+          panel is at <code>http://&lt;this-PC&apos;s-IP&gt;:{httpPort}</code> — changing the port reconnects everyone.
         </p>
       </div>
       {saveErr && <p className="err">{saveErr}</p>}
       <div className="modal-actions">
-        <button className="primary" disabled={saving} onClick={save}>{saving ? "Saving…" : "Save"}</button>
+        <button className="primary" disabled={saving || !dirty} onClick={save}>{saving ? "Saving…" : saved ? "Saved ✓" : "Save"}</button>
       </div>
-
       <AutoStartToggle initial={initial.app.autoStart} />
       <CheckForUpdates />
-      <SecurityPassword locked={locked} onLockedChange={setLocked} />
-      <BackupSection locked={locked} />
-    </Modal>
+      <div className="wiz-security"><b>About</b><span className="muted small">eXcontrol v{version}</span></div>
+    </>
   );
 }
 
-function AutoStartToggle({ initial }: { initial: boolean }) {
+export function AutoStartToggle({ initial }: { initial: boolean }) {
   const [enabled, setEnabled] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -143,7 +109,7 @@ function AutoStartToggle({ initial }: { initial: boolean }) {
   );
 }
 
-function CheckForUpdates() {
+export function CheckForUpdates() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -178,7 +144,7 @@ function CheckForUpdates() {
   );
 }
 
-function SecurityPassword({ locked, onLockedChange }: { locked: boolean; onLockedChange: (locked: boolean) => void }) {
+export function SecurityPassword({ locked, onLockedChange }: { locked: boolean; onLockedChange: (locked: boolean) => void }) {
   const [mode, setMode] = useState<null | "set" | "change" | "remove">(null);
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
@@ -262,7 +228,7 @@ function SecurityPassword({ locked, onLockedChange }: { locked: boolean; onLocke
   );
 }
 
-function BackupSection({ locked }: { locked: boolean }) {
+export function BackupSection({ locked }: { locked: boolean }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);

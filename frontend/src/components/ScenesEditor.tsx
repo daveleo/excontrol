@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import type { AppState, AppPreset, PresetAction, DeviceState } from "@excontrol/shared";
 import { ALWAYS_ON_DOMAIN } from "@excontrol/shared";
-import { Modal } from "./Modal.js";
 import { savePreset, deletePreset, applyPreset, verifyToken } from "../api.js";
 import { ensureUnlocked } from "../lib/unlock.js";
 
@@ -58,7 +57,8 @@ function buildRows(state: AppState): Row[] {
   return rows;
 }
 
-export function PresetsPanel({ state, onClose }: { state: AppState; onClose: () => void }) {
+/** Setup › Scenes: saved looks across devices, applied from the dashboard's scene chips. */
+export function ScenesEditor({ state }: { state: AppState }) {
   const [editing, setEditing] = useState<AppPreset | "new" | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -97,14 +97,14 @@ export function PresetsPanel({ state, onClose }: { state: AppState; onClose: () 
   }
 
   return (
-    <Modal title="Presets" onClose={onClose}>
+    <>
       <p className="modal-lead">
-        A preset is a saved look — brightness, presets, blackout and OBS scene across your
-        devices. Apply it with one tap, or mark one "Default on startup" so it's applied
-        automatically as soon as the power comes on.
+        A scene is a saved look across your devices — brightness, processor preset, picture on or
+        black, eXview input, OBS scene. It appears as a one-tap chip on the dashboard. Star one
+        (★) to have it applied automatically whenever the power comes on.
       </p>
 
-      {state.presets.length === 0 && <p className="hint muted">No presets yet.</p>}
+      {state.presets.length === 0 && <p className="hint muted">No scenes yet.</p>}
 
       {state.presets.map((p) => (
         <div key={p.id} className="preset-row">
@@ -112,7 +112,7 @@ export function PresetsPanel({ state, onClose }: { state: AppState; onClose: () 
             <b>{p.label}</b>
             <span className="pr-meta">
               {p.actions.length} action{p.actions.length === 1 ? "" : "s"}
-              {p.powerOnDefaultFor ? ` · ⭐ default for ${defaultLabel(p.powerOnDefaultFor)}` : ""}
+              {p.powerOnDefaultFor ? ` · ★ startup scene for ${defaultLabel(p.powerOnDefaultFor)}` : ""}
             </span>
           </div>
           <div className="row">
@@ -125,7 +125,7 @@ export function PresetsPanel({ state, onClose }: { state: AppState; onClose: () 
               onClick={() => void toggleDefault(p)}
               title={p.powerOnDefaultFor ? "Default on startup — tap to unmark" : "Mark as default on startup"}
             >
-              {p.powerOnDefaultFor ? "⭐" : "☆"} Default on startup
+              {p.powerOnDefaultFor ? "★" : "☆"} Startup scene
             </button>
             <button disabled={busy === p.id} onClick={() => void edit(p)}>Edit</button>
             <button disabled={busy === p.id} onClick={() => void remove(p.id)}>Delete</button>
@@ -134,9 +134,9 @@ export function PresetsPanel({ state, onClose }: { state: AppState; onClose: () 
       ))}
 
       <div className="modal-actions">
-        <button onClick={() => void edit("new")}>+ New preset</button>
+        <button onClick={() => void edit("new")}>+ New scene</button>
       </div>
-    </Modal>
+    </>
   );
 }
 
@@ -177,7 +177,7 @@ function PresetEditor({
     try {
       await savePreset({
         id: preset?.id,
-        label: label.trim() || "Preset",
+        label: label.trim() || "Scene",
         actions: Object.values(actions),
         powerOnDefaultFor: isDefault ? defaultTarget : null,
       });
@@ -190,7 +190,8 @@ function PresetEditor({
   const epsIds = state.devices.filter((d) => d.type === "expromo-eps").map((d) => d.id);
 
   return (
-    <Modal title={preset ? "Edit preset" : "New preset"} onClose={onClose}>
+    <div className="scene-editor">
+      <h3>{preset ? "Edit scene" : "New scene"}</h3>
       <label className="field">
         <span>Name</span>
         <input className="sched-label" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Daytime" />
@@ -230,7 +231,7 @@ function PresetEditor({
                     checked={a?.blackout ?? false}
                     onChange={(e) => patch(r.key, { blackout: e.target.checked })}
                   />
-                  Blackout
+                  Black (picture off)
                 </label>
                 {r.device.status !== "online" && r.presetOptions.length > 0 && (
                   <p className="cache-hint">Preset list is from the last known state — {r.device.label} is offline, not confirmed live.</p>
@@ -271,7 +272,7 @@ function PresetEditor({
         <div className="preset-default">
           <label className="toggle">
             <input type="checkbox" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} />
-            <span>⭐ Default on startup</span>
+            <span>★ Startup scene</span>
           </label>
           {isDefault && epsIds.length > 1 && (
             <label className="field">
@@ -296,6 +297,6 @@ function PresetEditor({
         <button onClick={onClose}>Cancel</button>
         <button className="primary" disabled={saving} onClick={save}>{saving ? "Saving…" : "Save"}</button>
       </div>
-    </Modal>
+    </div>
   );
 }
