@@ -39,15 +39,18 @@ none of this needs a header at all.
 | Set brightness | POST | `/api/devices/h9/zones/led/brightness` | `{"brightness": 60}` |
 | Recall a controller preset | POST | `/api/devices/h9/zones/led/preset` | `{"presetId": 0}` |
 | Blackout on/off | POST | `/api/devices/h9/zones/led/blackout` | `{"blackout": true}` |
-| Power an EPS unit | POST | `/api/power/eps/on` (or `/off`, or target `all`) | — |
+| Turn the room on / standby / off (same as the power bar) | POST | `/api/groups/all/state` | `{"state": "off"}` |
+| Turn a power group on / standby / off | POST | `/api/groups/<group-id>/state` | `{"state": "on"}` |
+| eXview On · Black · Standby | POST | `/api/devices/<id>/zones/-/power` | `{"state": "standby"}` |
+| Power an EPS unit (whole unit, verified; `all` = the whole room) | POST | `/api/power/eps/on` (or `/off`, or target `all`) | — |
 | Switch a named EPS output (independent output control) | POST | `/api/devices/eps/zones/<output-id>/on` | `{"on": true}` |
 | Recall an OBS scene | POST | `/api/devices/obs/zones/scenes/preset` | `{"presetId": 1}` |
-| Apply a saved eXcontrol preset (cross-device look) | POST | `/api/presets/<preset-id>/apply` | — |
+| Apply a scene (saved cross-device look; "presets" in the API) | POST | `/api/presets/<preset-id>/apply` | — |
 | Raw EPS command | POST | `/api/devices/eps/action/power_on` (or `power_off`, `status`) | — |
 
 Use `-` as the zone id (`/api/devices/h9/zones/-/brightness`) to hit a device's first/only
 zone without knowing its id — handy for single-zone controllers. The named-output row above
-is only available if that EPS has independent output control enabled (Devices) — its zone
+is only available if that EPS has independent output control enabled (Setup › Devices) — its zone
 ids are whatever you named them there, visible in `GET /api/state`.
 
 ## Setting it up in Companion

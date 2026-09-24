@@ -561,6 +561,24 @@ operator's screen, three meanings of "Presets", and seven toolbar items. The 23 
 - Backend: `roomLabel()`, `DeviceTarget.heldBy`, `ZoneState.relay` for EPS output zones.
   No change to how anything is controlled.
 
+## Next up (as of v0.3.1)
+
+- Release: v0.3.1 is on `main` but **not tagged** — pushing tag `v0.3.1` publishes the
+  installer as a GitHub Release (needs a go-ahead; it's public).
+- Live-test the power groups on real hardware end to end (highest-wins demo, Everything →
+  Off/On with two EPS units, the "turned on after its scheduled off" pop-up) — the driver is
+  verified on a real EPS, the engine so far in tests and a local smoke run.
+- eXview behaviour across a mains cut (cold-boot state, whether Standby survives) — decides
+  the best default for an eXview on an EPS output.
+- From the venue proposal, not built yet: nested groups, per-circuit "feeds" (parallel start
+  across separate boards), exception dates + catch-up after a restart, persisted group
+  targets, Companion group / eXview actions, per-surface scoping.
+- EPS firmware wishes (v2.3): POWER_ON from partly-on should only add the missing outputs,
+  reply "busy" instead of dropping a second connection, per-unit start offset + settable step,
+  report firmware version and restore-after-reboot in POWER_STATUS.
+- UX follow-ups: cards on a phone collapse only on load (not on resize); the first-run
+  wizard shares the new device list but not the Setup chrome.
+
 ## Known gaps / decisions pending
 
 - Default Electron icon everywhere (taskbar, tray, installer) — needs artwork.
