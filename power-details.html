@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>eXcontrol — power: technical details</title>
+<meta name="description" content="How eXcontrol turns an LED installation on, to standby and off: groups, EPS power units, screens, the order of work, the schedule and the safety rules. Describes eXcontrol v0.3.1.">
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#141924; --panel-2:#1a2130; --line:#232b3a;
+    --text:#e7ecf5; --muted:#8b96ac; --accent:#4f8cff; --accent-2:#7db2ff;
+    --ok:#3ecf8e; --warn:#e0a63e; --fault:#f07070; --off:#7b8598;
+    --relay:#c79bff; --relay-soft:#2a2340; --net:#45c2b3; --net-soft:#15312e;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:radial-gradient(1200px 600px at 50% -10%, #16213a 0%, var(--bg) 60%);
+    background-color:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.6;
+    padding-inline:16px;
+  }
+  a{color:var(--accent-2)}
+  code{font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;font-size:.88em;background:var(--panel-2);border:1px solid var(--line);padding:1px 6px;border-radius:5px;overflow-wrap:anywhere}
+  .wrap{max-width:960px;margin:0 auto}
+
+  header.hero{padding-block:56px 26px}
+  .brand{font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .brand a{color:inherit;text-decoration:none}
+  .brand .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--ok);box-shadow:0 0 10px var(--ok);margin-right:8px;vertical-align:1px}
+  h1{font-size:clamp(30px,5.4vw,46px);line-height:1.12;margin:16px 0 12px;letter-spacing:-.02em}
+  h1 .x{color:var(--accent-2)}
+  .lead{font-size:clamp(16px,2.2vw,19px);color:var(--muted);max-width:680px;margin:0}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
+  .chip{background:var(--panel-2);border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:13px;color:var(--muted)}
+
+  nav.toc{display:flex;flex-wrap:wrap;gap:8px;padding:16px 0 8px;border-top:1px solid var(--line);margin-top:28px}
+  nav.toc a{font-size:13.5px;text-decoration:none;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+  nav.toc a:hover{color:var(--text);border-color:var(--accent)}
+  nav.toc b{color:var(--accent-2);font-weight:600;margin-right:4px}
+
+  section{padding-block:34px 8px;scroll-margin-top:12px}
+  .eyebrow{font-size:12.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--accent-2);font-weight:700;margin:0 0 6px}
+  h2{font-size:clamp(22px,3.2vw,28px);margin:0 0 10px;letter-spacing:-.01em;line-height:1.2}
+  h3{font-size:16.5px;margin:0 0 6px}
+  .intro{color:var(--muted);max-width:720px;margin:0 0 20px}
+
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+  .grid.three{grid-template-columns:repeat(3,1fr)}
+  @media (max-width:780px){.grid.three{grid-template-columns:1fr 1fr}}
+  @media (max-width:560px){.grid,.grid.three{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px}
+  .card p{margin:0;color:var(--muted);font-size:14.5px}
+  .card p + p{margin-top:8px}
+  .card .k{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--accent-2);font-weight:700;display:block;margin-bottom:6px}
+  .card.big h3{font-size:18px}
+
+  figure{margin:18px 0 0;background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .fig-scroll{overflow-x:auto;padding:16px 16px 6px}
+  figure svg{display:block;width:100%;height:auto;min-width:720px}
+  figcaption{padding:12px 18px 16px;color:var(--muted);font-size:14px;border-top:1px solid var(--line)}
+  .legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;color:var(--muted);padding:0 18px 12px}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .legend i{display:inline-block;width:14px;height:12px;border-radius:3px;border:1.5px solid}
+
+  /* svg vocabulary */
+  .b{fill:var(--panel-2);stroke:var(--line);stroke-width:1.2}
+  .b.relay{fill:var(--relay-soft);stroke:var(--relay)}
+  .b.net{fill:var(--net-soft);stroke:var(--net)}
+  .b.wait{fill:none;stroke:var(--muted);stroke-dasharray:5 4}
+  .b.prot{fill:#2b1c1c;stroke:var(--fault)}
+  .b.hl{fill:#16263f;stroke:var(--accent)}
+  .t{fill:var(--text);font:600 13.5px -apple-system,"Segoe UI",sans-serif}
+  .s{fill:var(--muted);font:400 12px -apple-system,"Segoe UI",sans-serif}
+  .m{fill:var(--text);font:500 12px ui-monospace,Consolas,monospace}
+  .h{fill:var(--muted);font:700 11px -apple-system,"Segoe UI",sans-serif;letter-spacing:.1em}
+  .l{fill:var(--muted);font:500 12px -apple-system,"Segoe UI",sans-serif}
+  .l.ok{fill:var(--ok)} .l.acc{fill:var(--accent-2)} .l.relay{fill:var(--relay)} .l.net{fill:var(--net)}
+  .e{fill:none;stroke:var(--muted);stroke-width:1.5}
+  .e.relay{stroke:var(--relay)} .e.net{stroke:var(--net)} .e.acc{stroke:var(--accent)} .e.dash{stroke-dasharray:5 4}
+  .ah{fill:var(--muted)} .ah.relay{fill:var(--relay)} .ah.net{fill:var(--net)} .ah.acc{fill:var(--accent)}
+  .tick{fill:var(--relay)} .tick.net{fill:var(--net)}
+  .grid-l{stroke:var(--line);stroke-width:1;stroke-dasharray:2 4}
+
+  /* tables */
+  .table-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--panel);margin-top:18px}
+  table{border-collapse:collapse;width:100%;min-width:680px;font-size:14px}
+  th,td{text-align:left;vertical-align:top;padding:12px 14px;border-bottom:1px solid var(--line)}
+  tr:last-child td{border-bottom:0}
+  thead th{background:var(--panel-2);font-size:12.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700}
+  td:first-child{font-weight:600;width:24%}
+  td{color:var(--muted)}
+  td strong{color:var(--text)}
+
+  .pill{display:inline-block;font-size:12px;font-weight:700;padding:2px 9px;border-radius:999px;border:1px solid;white-space:nowrap;margin:1px 4px 1px 0}
+  .p-on{color:var(--ok);border-color:#1f5e44;background:#10251c}
+  .p-warn{color:var(--warn);border-color:#6a5222;background:#2a2112}
+  .p-off{color:#b5bdcc;border-color:#3a4254;background:#1a1f2b}
+  .p-fault{color:var(--fault);border-color:#6a2f2f;background:#2a1515}
+
+  .rules{list-style:none;margin:18px 0 0;padding:0;display:grid;gap:10px;counter-reset:r}
+  .rules li{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 18px 14px 58px;position:relative;color:var(--muted);font-size:14.5px;counter-increment:r}
+  .rules li::before{content:counter(r);position:absolute;left:16px;top:13px;width:28px;height:28px;border-radius:50%;border:1.5px solid var(--accent);color:var(--accent-2);font-weight:700;font-size:13.5px;display:flex;align-items:center;justify-content:center}
+  .rules li strong{color:var(--text)}
+
+  .note{background:#16263f;border:1px solid #27416b;border-left:4px solid var(--accent);border-radius:10px;padding:14px 18px;color:#c9d6ee;font-size:14.5px;margin-top:18px}
+  .note.warn{background:#241d10;border-color:#5a4520;border-left-color:var(--warn);color:#ecdcbc}
+  .note strong{color:var(--text)}
+
+  .api td:first-child{width:auto}
+  .api td code{white-space:nowrap}
+
+  footer{padding-block:40px 60px;color:var(--muted);font-size:13px;border-top:1px solid var(--line);margin-top:40px}
+  footer p{margin:0 0 6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="brand"><a href="./"><span class="dot"></span>eXcontrol</a> · technical details</div>
+  <h1>Power: <span class="x">technical details</span></h1>
+  <p class="lead">How eXcontrol turns an LED installation on, puts it to standby and turns it off, for one screen or a whole venue. This covers what each button does, who decides, the order things happen in, and the rules that protect the hardware. New to this? Start with the <a href="power.html">simple overview</a>.</p>
+  <div class="meta">
+    <span class="chip">eXcontrol v0.3.1</span>
+    <span class="chip">Expromo EPS firmware v2.2</span>
+    <span class="chip">NovaStar H-series · COEX · Expromo eXview</span>
+  </div>
+  <nav class="toc" aria-label="Sections">
+    <a href="#short"><b>1</b>The short version</a>
+    <a href="#wiring"><b>2</b>Wiring</a>
+    <a href="#decide"><b>3</b>Who decides</a>
+    <a href="#states"><b>4</b>On · Standby · Off</a>
+    <a href="#order"><b>5</b>Order of work</a>
+    <a href="#eps"><b>6</b>EPS safety</a>
+    <a href="#startup"><b>7</b>After power returns</a>
+    <a href="#schedule"><b>8</b>Schedule</a>
+    <a href="#screen"><b>9</b>On screen</a>
+    <a href="#api"><b>10</b>Other controllers</a>
+    <a href="#later"><b>11</b>Not yet</a>
+  </nav>
+</header>
+
+<!-- 1 -->
+<section id="short">
+  <p class="eyebrow">1 · The short version</p>
+  <h2>Four ideas explain everything else</h2>
+  <div class="grid">
+    <div class="card big">
+      <span class="k">One bar for the room</span>
+      <h3>Turn on · Standby · Turn off</h3>
+      <p>The power bar at the top of the dashboard controls the whole room. It shows the room's state in one word and the next scheduled change. Turning the room off or to standby needs a second tap to confirm.</p>
+    </div>
+    <div class="card big">
+      <span class="k">Groups</span>
+      <h3>Parts of the room have their own target</h3>
+      <p>A group (e.g. <em>LED wall</em>, <em>Screens</em>) is a named set of devices with a target: On, Standby or Off. If a device is in two groups, it follows the <strong>higher</strong> target, so switching one group off never cuts something another group still needs.</p>
+    </div>
+    <div class="card big">
+      <span class="k">EPS power</span>
+      <h3>If it's on an EPS, the EPS decides</h3>
+      <p>A device fed by an Expromo EPS power unit is turned off by switching off its relay. eXcontrol starts units one at a time, never cuts power that something else still needs, and checks every command it sends.</p>
+    </div>
+    <div class="card big">
+      <span class="k">Nothing is fought</span>
+      <h3>It acts when a target changes</h3>
+      <p>eXcontrol carries out a change once, then watches. If someone turns a screen back on with a remote or another controller, eXcontrol doesn't switch it off again. It shows a pop-up so you know.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 2 -->
+<section id="wiring">
+  <p class="eyebrow">2 · The pieces</p>
+  <h2>How devices are wired to power</h2>
+  <p class="intro">An Expromo EPS has six relays ("outputs"). During setup, each device is given <em>Powered by</em>: which EPS feeds it, and optionally which one output. That setting is all eXcontrol knows about the wiring, so it has to be right.</p>
+  <figure>
+    <div class="fig-scroll">
+      <svg viewBox="0 0 900 318" role="img" aria-label="Example wiring. An EPS unit with six outputs. Outputs 1 to 4 feed the LED wall, whose devices have no output set, so they share every output nobody claimed. Output 5 is claimed by an eXview screen. Output 6 feeds a network switch and is marked protected. On the right, devices on their own wall socket are controlled over the network only.">
+        <defs>
+          <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah relay"/></marker>
+        </defs>
+        <text x="20" y="20" class="h">ONE EPS UNIT</text>
+        <text x="330" y="20" class="h">WHAT IS PLUGGED IN</text>
+        <text x="716" y="20" class="h">NO EPS</text>
+
+        <rect x="20" y="32" width="170" height="272" rx="10" class="b relay"/>
+        <text x="36" y="58" class="t">Expromo EPS</text>
+        <text x="36" y="76" class="s">6 zero-cross relays</text>
+
+        <!-- outputs: centers y = 102,136,170,204,238,272 -->
+        <rect x="36" y="90" width="138" height="24" rx="5" class="b"/><text x="48" y="107" class="m">OUT 1</text>
+        <rect x="36" y="124" width="138" height="24" rx="5" class="b"/><text x="48" y="141" class="m">OUT 2</text>
+        <rect x="36" y="158" width="138" height="24" rx="5" class="b"/><text x="48" y="175" class="m">OUT 3</text>
+        <rect x="36" y="192" width="138" height="24" rx="5" class="b"/><text x="48" y="209" class="m">OUT 4</text>
+        <rect x="36" y="226" width="138" height="24" rx="5" class="b"/><text x="48" y="243" class="m">OUT 5</text>
+        <rect x="36" y="260" width="138" height="24" rx="5" class="b prot"/><text x="48" y="277" class="m">OUT 6</text>
+
+        <path d="M174 102 H328 M174 136 H328 M174 170 H328 M174 204 H328" class="e relay" />
+        <path d="M174 238 H328" class="e relay"/>
+        <path d="M174 272 H328" class="e relay"/>
+
+        <rect x="330" y="88" width="360" height="130" rx="8" class="b"/>
+        <text x="346" y="112" class="t">LED wall: H9 + COEX + cabinets</text>
+        <text x="346" y="134" class="s">Powered by: this EPS, no output set ("whole unit")</text>
+        <text x="346" y="154" class="s">Shares every output no other device claimed:</text>
+        <text x="346" y="172" class="s">here 1–4 and 6. A relay goes off only when every</text>
+        <text x="346" y="190" class="s">device sharing it is Off.</text>
+        <text x="346" y="208" class="s" style="fill:var(--relay)">cabinets and lights need no device entry at all</text>
+
+        <rect x="330" y="224" width="360" height="30" rx="8" class="b net"/>
+        <text x="346" y="244" class="t">eXview screen</text><text x="462" y="244" class="s">Powered by: this EPS · output 5</text>
+
+        <rect x="330" y="258" width="360" height="30" rx="8" class="b prot"/>
+        <text x="346" y="278" class="t">Network switch</text><text x="468" y="278" class="s">output 6 marked protected</text>
+
+        <rect x="716" y="88" width="166" height="200" rx="8" class="b net"/>
+        <text x="730" y="112" class="t">Own wall socket</text>
+        <text x="730" y="134" class="s">eXview in the lobby,</text>
+        <text x="730" y="152" class="s">a processor, OBS PC</text>
+        <text x="730" y="180" class="s">Nothing to switch off,</text>
+        <text x="730" y="198" class="s">so eXcontrol uses the</text>
+        <text x="730" y="216" class="s">network instead:</text>
+        <text x="730" y="240" class="s">eXview → Standby</text>
+        <text x="730" y="258" class="s">NovaStar → Black</text>
+      </svg>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--relay-soft);border-color:var(--relay)"></i>switched by an EPS relay</span>
+      <span><i style="background:var(--net-soft);border-color:var(--net)"></i>controlled over the network</span>
+      <span><i style="background:#2b1c1c;border-color:var(--fault)"></i>protected: never switched off automatically</span>
+    </div>
+    <figcaption>One EPS can feed several things: the LED wall on some outputs and a screen on its own output. Switching the screen's output never touches the wall's outputs, and the reverse is also true.</figcaption>
+  </figure>
+
+  <div class="grid three" style="margin-top:14px">
+    <div class="card"><span class="k">Output ownership</span><p>A device with an output set <strong>owns</strong> that output. Devices without one share all the rest. A device with no <em>Powered by</em> is on its own socket.</p></div>
+    <div class="card"><span class="k">Protected output</span><p>For the network switch or the control PC. The room, a group or a schedule <strong>never switches it off</strong>, because eXcontrol would lose its own connection. Its own button in Power › Details still works.</p></div>
+    <div class="card"><span class="k">Spare outputs</span><p>Outputs that no configured device depends on (lights, passive loads, a spare unit) follow <strong>only the room</strong>. A group never touches them.</p></div>
+  </div>
+</section>
+
+<!-- 3 -->
+<section id="decide">
+  <p class="eyebrow">3 · Who decides</p>
+  <h2>How each device gets its target</h2>
+  <p class="intro">Buttons and schedules never switch devices directly. They set a <strong>target</strong> on the room or on a group. eXcontrol then works out each device's target and carries it out.</p>
+  <figure>
+    <div class="fig-scroll">
+      <svg viewBox="0 0 900 300" role="img" aria-label="Who decides. The power bar, the schedule, a group row, or the API sets a target on the room or on a group. The room passes its target down to every group. A device in two groups, here an eXview in both LED wall (Off) and Screens (On), follows the highest target, so it stays On. A command on the device's own card overrides its groups until one of them changes. A device in no group follows the room.">
+        <defs>
+          <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+          <marker id="a2a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah acc"/></marker>
+        </defs>
+        <text x="20" y="20" class="h">WHO ASKS</text>
+        <text x="258" y="20" class="h">THE ROOM</text>
+        <text x="478" y="20" class="h">GROUPS</text>
+        <text x="706" y="20" class="h">A DEVICE</text>
+
+        <rect x="20" y="34" width="180" height="36" rx="7" class="b"/><text x="34" y="57" class="t">Power bar</text>
+        <rect x="20" y="80" width="180" height="36" rx="7" class="b"/><text x="34" y="103" class="t">Schedule entry</text>
+        <rect x="20" y="126" width="180" height="36" rx="7" class="b"/><text x="34" y="149" class="t">Group row</text>
+        <rect x="20" y="172" width="180" height="36" rx="7" class="b"/><text x="34" y="195" class="t">API · Companion</text>
+
+        <path d="M200 52 H222 M200 98 H222 M200 144 H222 M200 190 H222 M222 52 V190" class="e"/>
+        <path d="M222 110 H256" class="e" marker-end="url(#a2)"/>
+        <path d="M222 144 H240 V236 H540 V214" class="e dash" marker-end="url(#a2)"/>
+        <text x="250" y="252" class="l">or straight to one group</text>
+
+        <rect x="258" y="80" width="170" height="64" rx="8" class="b hl"/>
+        <text x="272" y="104" class="t">Room target</text>
+        <text x="272" y="124" class="s">e.g. Off, set 17:00</text>
+        <text x="272" y="139" class="s">by "Schedule: Power off"</text>
+
+        <path d="M428 100 H452 V62 H476" class="e acc" marker-end="url(#a2a)"/>
+        <path d="M452 100 V182 H476" class="e acc" marker-end="url(#a2a)"/>
+        <text x="458" y="126" class="l acc">passes</text>
+        <text x="458" y="142" class="l acc">down</text>
+
+        <rect x="478" y="40" width="180" height="46" rx="8" class="b"/>
+        <text x="492" y="60" class="t">LED wall</text><text x="492" y="78" class="s">target: Off</text>
+        <rect x="478" y="150" width="180" height="64" rx="8" class="b"/>
+        <text x="492" y="172" class="t">Screens</text><text x="492" y="191" class="s">target: On (set later,</text><text x="492" y="206" class="s">from its own row)</text>
+
+        <path d="M658 63 H682 V110 H704" class="e"/>
+        <path d="M658 187 H682 V130 H704" class="e" marker-end="url(#a2)"/>
+
+        <rect x="706" y="84" width="176" height="74" rx="8" class="b net"/>
+        <text x="720" y="106" class="t">eXview</text>
+        <text x="720" y="125" class="s">in both groups</text>
+        <text x="720" y="146" class="l ok">highest wins → On</text>
+
+        <rect x="706" y="178" width="176" height="108" rx="8" class="b wait"/>
+        <text x="720" y="200" class="s">Its own card: a command</text>
+        <text x="720" y="218" class="s">there overrides its groups</text>
+        <text x="720" y="236" class="s">until one of them changes.</text>
+        <text x="720" y="258" class="s">In no group: it follows</text>
+        <text x="720" y="274" class="s">the room.</text>
+      </svg>
+    </div>
+  </figure>
+  <ol class="rules">
+    <li><strong>The room passes its target down.</strong> Setting the room (the power bar, or a schedule entry for the whole room) sets every group to the same target and clears any per-device overrides.</li>
+    <li><strong>Highest wins.</strong> A device in several groups follows the highest target among them: On beats Standby, which beats Off.</li>
+    <li><strong>No group, then the room.</strong> A device that isn't in any group follows the room's target.</li>
+    <li><strong>The device's own card overrides</strong> until one of its groups changes next. Turning something back on from its card doesn't raise a "turned on after its scheduled off" pop-up.</li>
+  </ol>
+  <div class="note"><strong>After a restart,</strong> group targets start as "not set", and eXcontrol switches nothing at start-up. Things stay as they are until the next change: a button, or the next schedule entry.</div>
+</section>
+
+<!-- 4 -->
+<section id="states">
+  <p class="eyebrow">4 · On · Standby · Off</p>
+  <h2>What the three targets do to each kind of device</h2>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Device</th><th>On</th><th>Standby</th><th>Off</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Anything on an EPS</td>
+          <td>Its output(s) switched on, then an eXview is <strong>woken</strong> and a NovaStar is <strong>un-blacked</strong></td>
+          <td>Power <strong>stays on</strong>. eXview → Standby, NovaStar → Black</td>
+          <td>Its <strong>output is switched off</strong>. The EPS decides, with no soft step first.</td>
+        </tr>
+        <tr>
+          <td>eXview on its own socket</td>
+          <td>Woken (wake packet, or the power-on command from Black)</td>
+          <td>Deep Standby</td>
+          <td>Same as Standby, since there's no relay to cut</td>
+        </tr>
+        <tr>
+          <td>NovaStar H-series / COEX on its own socket</td>
+          <td>Black released</td>
+          <td>Black</td>
+          <td>Black</td>
+        </tr>
+        <tr>
+          <td>Off, but its output also feeds a device that must stay on</td>
+          <td>n/a</td>
+          <td>n/a</td>
+          <td>Stays powered. It goes to Standby / Black instead, and its card says <strong>who it's kept on for</strong>.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <figure>
+    <div class="fig-scroll">
+      <svg viewBox="0 0 900 250" role="img" aria-label="eXview power states. On and Black switch instantly both ways. From On or Black, Standby takes about 20 seconds of silent reboot. Black also turns into Standby on the screen's own timer. From Standby, only the wake packet brings it back On, which takes 30 to 70 seconds.">
+        <defs>
+          <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah net"/></marker>
+          <marker id="a3m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+        </defs>
+        <text x="20" y="20" class="h">AN EXVIEW SCREEN, OVER THE NETWORK</text>
+
+        <rect x="30" y="92" width="190" height="64" rx="10" class="b net"/>
+        <text x="46" y="118" class="t">On</text><text x="46" y="138" class="s">picture on</text>
+        <rect x="355" y="92" width="190" height="64" rx="10" class="b"/>
+        <text x="371" y="118" class="t">Black</text><text x="371" y="138" class="s">picture muted, fully awake</text>
+        <rect x="680" y="92" width="190" height="64" rx="10" class="b"/>
+        <text x="696" y="118" class="t">Standby</text><text x="696" y="138" class="s">LED supplies off, low power</text>
+
+        <path d="M220 110 H353" class="e net" marker-end="url(#a3)"/>
+        <text x="286" y="102" class="l net" text-anchor="middle">Black · instant</text>
+        <path d="M355 140 H222" class="e net" marker-end="url(#a3)"/>
+        <text x="286" y="160" class="l net" text-anchor="middle">On · instant</text>
+
+        <path d="M545 124 H678" class="e dash" marker-end="url(#a3m)"/>
+        <text x="612" y="116" class="l" text-anchor="middle">screen's own timer</text>
+
+        <path d="M125 92 V58 H775 V90" class="e net" marker-end="url(#a3)"/>
+        <text x="450" y="50" class="l net" text-anchor="middle">Standby · about 20 s of silent reboot to get there</text>
+
+        <path d="M775 156 V196 H125 V158" class="e net" marker-end="url(#a3)"/>
+        <text x="450" y="216" class="l net" text-anchor="middle">Wake · only the wake packet works from Standby · 30–70 s</text>
+
+        <text x="20" y="242" class="s">NovaStar H-series and COEX have On ⇄ Black only. There's no standby over the network.</text>
+      </svg>
+    </div>
+    <figcaption>While an eXview is entering or leaving Standby it goes silent for a while. eXcontrol expects that and shows <em>Going to standby…</em> or <em>Waking…</em>, not a fault. The Black → Standby timer is a setting on the screen itself, which eXcontrol can't read.</figcaption>
+  </figure>
+</section>
+
+<!-- 5 -->
+<section id="order">
+  <p class="eyebrow">5 · Order of work</p>
+  <h2>What happens, step by step, when a target changes</h2>
+  <p class="intro">Each change runs as one job, in a fixed order. If a newer change arrives while a job is running, the newer one wins. Progress is shown live in the power bar.</p>
+  <ol class="rules">
+    <li><strong>Soft off.</strong> Devices that aren't losing their power go to Standby or Black over the network. That covers everything set to Standby, screens on their own socket, and devices kept powered for someone else.</li>
+    <li><strong>Switch-offs.</strong> EPS units in <strong>reverse</strong> order. The relays switch off at current zero, so switching off needs no stagger, only the right order.</li>
+    <li><strong>Switch-ons.</strong> <strong>One EPS unit at a time</strong>, with a 1 s gap between units, so there is only one inrush at a time. A unit that is fully off uses its own built-in sequence. Otherwise only the missing outputs are switched on, 300 ms apart.</li>
+    <li><strong>Wait, then wake.</strong> eXcontrol waits for each device to come online (up to 4 min each), then wakes the screens 2 s apart and releases Black on the NovaStar processors it blacked out.</li>
+  </ol>
+  <figure>
+    <div class="fig-scroll">
+      <svg viewBox="0 0 900 390" role="img" aria-label="Timelines. Turn on with two EPS units and two screens: EPS 1 runs its sequence, one second start delay then six relays 300 ms apart, fully on at about 2.6 seconds. After a one second gap EPS 2 does the same, fully on at about 6.2 seconds. Then eXcontrol waits for each device to come online, up to four minutes, and wakes the screens two seconds apart. Turn off: screens on their own socket go to standby first, then EPS 2 switches off, then EPS 1, each all six outputs at once.">
+        <text x="20" y="22" class="h">TURN ON · TWO EPS UNITS, TWO SCREENS</text>
+        <text x="20" y="62" class="t">EPS 1</text>
+        <text x="20" y="102" class="t">EPS 2</text>
+        <text x="20" y="142" class="t">Screens</text>
+
+        <!-- scale: x = 130 + t*72 (t in s), 0..8 -->
+        <path d="M130 36 V160 M202 36 V160 M274 36 V160 M346 36 V160 M418 36 V160 M490 36 V160 M562 36 V160 M634 36 V160 M706 36 V160" class="grid-l"/>
+
+        <rect x="130" y="48" width="72" height="20" rx="4" class="b wait"/><text x="136" y="62" class="s">start delay</text>
+        <rect x="202" y="48" width="6" height="20" class="tick"/><rect x="224" y="48" width="6" height="20" class="tick"/><rect x="245" y="48" width="6" height="20" class="tick"/><rect x="267" y="48" width="6" height="20" class="tick"/><rect x="288" y="48" width="6" height="20" class="tick"/><rect x="310" y="48" width="6" height="20" class="tick"/>
+        <text x="324" y="63" class="l relay">fully on ~2.6 s</text>
+
+        <path d="M317 98 H389" class="e dash"/><text x="353" y="90" class="l" text-anchor="middle">1 s gap</text>
+        <rect x="389" y="88" width="72" height="20" rx="4" class="b wait"/><text x="395" y="102" class="s">start delay</text>
+        <rect x="461" y="88" width="6" height="20" class="tick"/><rect x="483" y="88" width="6" height="20" class="tick"/><rect x="504" y="88" width="6" height="20" class="tick"/><rect x="526" y="88" width="6" height="20" class="tick"/><rect x="547" y="88" width="6" height="20" class="tick"/><rect x="569" y="88" width="6" height="20" class="tick"/>
+        <text x="583" y="103" class="l relay">fully on ~6.2 s</text>
+
+        <rect x="600" y="128" width="180" height="22" rx="4" class="b wait"/><text x="610" y="143" class="s">wait until online (≤ 4 min)</text>
+        <rect x="790" y="128" width="42" height="22" rx="4" class="b net"/><text x="811" y="143" class="s" text-anchor="middle">1</text>
+        <rect x="838" y="128" width="46" height="22" rx="4" class="b net"/><text x="861" y="143" class="s" text-anchor="middle">+2 s</text>
+
+        <path d="M130 170 H706" class="e"/>
+        <text x="130" y="188" class="s" text-anchor="middle">0 s</text><text x="202" y="188" class="s" text-anchor="middle">1</text><text x="274" y="188" class="s" text-anchor="middle">2</text><text x="346" y="188" class="s" text-anchor="middle">3</text><text x="418" y="188" class="s" text-anchor="middle">4</text><text x="490" y="188" class="s" text-anchor="middle">5</text><text x="562" y="188" class="s" text-anchor="middle">6</text><text x="634" y="188" class="s" text-anchor="middle">7</text><text x="706" y="188" class="s" text-anchor="middle">8 s</text>
+        <text x="837" y="188" class="s" text-anchor="middle">wake</text>
+
+        <text x="20" y="232" class="h">TURN OFF · SAME ROOM</text>
+        <text x="20" y="272" class="t">Screens</text>
+        <text x="20" y="312" class="t">EPS 2</text>
+        <text x="20" y="352" class="t">EPS 1</text>
+        <rect x="130" y="258" width="210" height="22" rx="4" class="b net"/><text x="140" y="273" class="s">own-socket screens → Standby</text>
+        <rect x="350" y="298" width="130" height="22" rx="4" class="b relay"/><text x="360" y="313" class="s">all 6 off at once</text>
+        <rect x="490" y="338" width="130" height="22" rx="4" class="b relay"/><text x="500" y="353" class="s">all 6 off at once</text>
+        <text x="640" y="302" class="s">Reverse order. Devices on an EPS</text>
+        <text x="640" y="320" class="s">get no soft step: the relay decides.</text>
+        <text x="640" y="338" class="s">Protected outputs stay on.</text>
+      </svg>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--relay);border-color:var(--relay)"></i>one relay switching on (the EPS's own 300 ms steps)</span>
+      <span><i style="background:var(--net-soft);border-color:var(--net)"></i>network command to a screen</span>
+      <span><i style="background:transparent;border-color:var(--muted);border-style:dashed"></i>waiting</span>
+    </div>
+    <figcaption>The timings are measured on EPS firmware v2.2: a 1 s start delay, then one relay every ~300 ms. With five units, the room is powered in about 17 s. Screens and processors then take as long as they need to boot.</figcaption>
+  </figure>
+</section>
+
+<!-- 6 -->
+<section id="eps">
+  <p class="eyebrow">6 · EPS safety rules</p>
+  <h2>The rules eXcontrol follows with every EPS command</h2>
+  <p class="intro">Each rule comes from testing a real unit. eXcontrol applies them to every command, wherever it comes from: the power bar, a group, a schedule, Companion or the API.</p>
+  <div class="grid">
+    <div class="card"><span class="k">Never restart running equipment</span><p>On a partly-on unit, POWER_ON first switches <em>everything</em> off, then re-sequences, so running equipment loses power for about 1 s. eXcontrol <strong>only sends POWER_ON to a fully-off unit</strong>. Otherwise it switches on just the missing outputs.</p></div>
+    <div class="card"><span class="k">Don't interrupt a sequence</span><p>A single-output command sent during the unit's own sequence aborts it, and the remaining outputs never come on. eXcontrol <strong>waits for the sequence to finish</strong>.</p></div>
+    <div class="card"><span class="k">One connection at a time</span><p>Two connections at once can make the unit drop both commands, then ignore everything for ~10 s. eXcontrol keeps one queue per unit, and status checks wait while a command runs.</p></div>
+    <div class="card"><span class="k">Verify, then retry</span><p>Every command is confirmed by reading the status back, and retried up to 3 times if it didn't take. Repeating a command is harmless. This also recovers from collisions with other controllers.</p></div>
+    <div class="card"><span class="k">Minimum off-time: 30 s</span><p>An output stays off at least 30 s before it's switched on again. This protects inrush limiters, and processors and Android screens aren't hard-cycled. eXcontrol shows a notice while it waits. It can be set per unit.</p></div>
+    <div class="card"><span class="k">Patience before a fault</span><p>An EPS is shown as <em>Not responding</em> only after <strong>3 missed status checks</strong> in a row, not after one lost reply.</p></div>
+  </div>
+</section>
+
+<!-- 7 -->
+<section id="startup">
+  <p class="eyebrow">7 · After power returns</p>
+  <h2>Starting up, and the power-on default scene</h2>
+  <div class="grid">
+    <div class="card">
+      <span class="k">Boot allowance</span>
+      <h3>Up to 4 minutes to start</h3>
+      <p>When an EPS comes on, its equipment gets up to 4 minutes to start before a missing device counts as a problem. Meanwhile the room shows <em>Starting…</em> and names what it's waiting for. A device whose own output is switched off is expected to be silent. It shows <em>No power</em>, not a fault.</p>
+    </div>
+    <div class="card">
+      <span class="k">Default scene</span>
+      <h3>Brightness and inputs back to normal</h3>
+      <p>A scene can be marked as the power-on default for one EPS, or for all. When that EPS goes from off to on, eXcontrol waits 4 s, applies the scene, and applies it again 9 s later (controllers sometimes overwrite settings while they finish booting). It only covers devices on that EPS.</p>
+      <p>It only runs if eXcontrol <strong>saw the unit off first</strong>. Restarting eXcontrol next to a wall that's already on doesn't reset anything.</p>
+    </div>
+  </div>
+  <div class="note warn"><strong>After a building power cut,</strong> what each EPS does depends on its own <em>Restore after reboot</em> setting (in its web page). eXcontrol can't start units in sequence while it's still booting itself. On sites with several EPS units on one supply, keep restore <strong>off</strong> and let a schedule or the power bar bring the room up.</div>
+</section>
+
+<!-- 8 -->
+<section id="schedule">
+  <p class="eyebrow">8 · Schedule</p>
+  <h2>Timed changes, warnings and "+1 hour"</h2>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Part</th><th>How it works</th></tr></thead>
+      <tbody>
+        <tr><td>Actions</td><td><strong>Turn on</strong>, <strong>Standby</strong>, <strong>Turn off</strong>, or <strong>apply a scene</strong>.</td></tr>
+        <tr><td>Target</td><td>The <strong>room</strong>, one <strong>group</strong>, or one <strong>EPS unit</strong> (whole-unit power, still with every safety rule from section 6). Standby isn't possible for a single EPS unit, so such an entry is skipped.</td></tr>
+        <tr><td>Days</td><td>Pick the weekdays. With none picked, the entry runs <strong>every day</strong>.</td></tr>
+        <tr><td>Warning</td><td>Before a Turn off or Standby entry, a full-screen warning appears in the last <strong>15 minutes</strong>. It names what will switch off and can be dismissed.</td></tr>
+        <tr><td>Extend by 1 hour</td><td>Available in the warning and in the power bar, up to 12 hours in total. It applies to <strong>that one entry only</strong>. Other entries still run on time, and when the extension ends only that entry's own target is switched.</td></tr>
+        <tr><td>Precision</td><td>The schedule is checked every 20 s, so an entry runs within the first 20 s of its minute. It follows the PC's clock and time zone.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note warn"><strong>Run one eXcontrol per installation.</strong> Two copies pointed at the same hardware each carry out their own schedule, so the room gets switched by both. If you set up a test copy, point it at test hardware or disable its schedule.</div>
+</section>
+
+<!-- 9 -->
+<section id="screen">
+  <p class="eyebrow">9 · What you see</p>
+  <h2>One vocabulary everywhere</h2>
+  <p class="intro">Every card, row and bar uses the same words and colours. <strong>Red means someone needs to look</strong>. Nothing else is red.</p>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Word</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><span class="pill p-on">On</span><span class="pill p-on">Partly on</span></td><td>Running. <em>Partly on</em>: some displays are on, others aren't, or an EPS has some outputs off.</td></tr>
+        <tr><td><span class="pill p-warn">Black</span><span class="pill p-warn">Standby</span></td><td>Picture off, device still reachable. Black comes back instantly. Standby takes 30–70 s to wake.</td></tr>
+        <tr><td><span class="pill p-warn">Starting…</span><span class="pill p-warn">Waking…</span><span class="pill p-warn">Going to standby…</span><span class="pill p-warn">Turning off…</span></td><td>A change is in progress. The power bar shows what it's working on, e.g. "Powering on EPS 2" or "Waiting for H9".</td></tr>
+        <tr><td><span class="pill p-off">Off</span><span class="pill p-off">No power</span></td><td>Switched off as intended. <em>No power</em>: its EPS output is off, so it's expected to be silent.</td></tr>
+        <tr><td><span class="pill p-fault">Not responding</span></td><td>Should be reachable but isn't. Check its power and network.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="grid" style="margin-top:14px">
+    <div class="card"><span class="k">Why a device is in its state</span><p>Each card says which group decided, e.g. <em>On · via Screens</em>. When an Off device is kept powered for another device, its card says so, e.g. <em>power stays on, output also feeds H9</em>.</p></div>
+    <div class="card"><span class="k">Pop-ups</span><p>If something comes back on after it was set to Off or Standby (a remote, a wall switch, another controller), a pop-up says what and when, e.g. <em>"eXview turned On after it was set to Standby (Schedule: Power off, 17:00)."</em> Dismiss it, or leave it for the next person.</p></div>
+  </div>
+</section>
+
+<!-- 10 -->
+<section id="api">
+  <p class="eyebrow">10 · Other controllers</p>
+  <h2>Companion, Crestron, Q-SYS: go through eXcontrol</h2>
+  <p class="intro">Other control systems should send requests to eXcontrol instead of to the EPS directly. That way the same order of work and the same safety rules apply to their commands too. Group actions aren't in the Companion module yet, but its Generic HTTP module can call these directly.</p>
+  <div class="table-scroll api">
+    <table>
+      <thead><tr><th>Action</th><th>Request</th><th>Body</th></tr></thead>
+      <tbody>
+        <tr><td>Room or group: On / Standby / Off</td><td><code>POST /api/groups/&lt;id&gt;/state</code><br><span style="font-size:13px"><code>all</code> = the room</span></td><td><code>{"state":"on"|"standby"|"off"}</code></td></tr>
+        <tr><td>Room on / off (same as the power bar)</td><td><code>POST /api/power/all/on</code> · <code>/off</code></td><td>none</td></tr>
+        <tr><td>One EPS unit on / off (safe)</td><td><code>POST /api/power/&lt;eps-id&gt;/on</code> · <code>/off</code></td><td>none</td></tr>
+        <tr><td>One eXview: On / Black / Standby</td><td><code>POST /api/devices/&lt;id&gt;/zones/-/power</code></td><td><code>{"state":"on"|"blackout"|"standby"}</code></td></tr>
+        <tr><td>List / save groups</td><td><code>GET</code> · <code>PUT /api/groups</code></td><td>PUT: <code>{"groups":[…]}</code></td></tr>
+        <tr><td>Dismiss a pop-up</td><td><code>POST /api/alerts/&lt;id&gt;/dismiss</code></td><td><code>all</code> dismisses every one</td></tr>
+        <tr><td>Everything, live</td><td><code>GET /api/state</code></td><td>includes <code>groups</code>, <code>deviceTargets</code>, <code>alerts</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="intro" style="margin-top:14px;font-size:14px">If an access password is set (Setup › Access), it protects everything, including these requests. A controller logs in once and sends the bearer token it gets with every request. The token is valid for 30 days or until eXcontrol restarts. See <a href="https://github.com/daveleo/excontrol/blob/main/docs/SECURITY.md">Security</a>.</p>
+</section>
+
+<!-- 11 -->
+<section id="later">
+  <p class="eyebrow">11 · Not yet</p>
+  <h2>Known limits of this version</h2>
+  <div class="grid three">
+    <div class="card"><span class="k">Groups</span><p>No nested groups. Group targets aren't kept across a restart.</p></div>
+    <div class="card"><span class="k">Supply</span><p>All EPS units are started one after another. There's no per-circuit "feeds" setting yet to run separate supplies in parallel.</p></div>
+    <div class="card"><span class="k">Schedule</span><p>No exception dates (holidays). An entry missed while eXcontrol was down isn't caught up afterwards.</p></div>
+    <div class="card"><span class="k">Companion</span><p>No group or eXview actions in the Companion module yet (use Generic HTTP).</p></div>
+    <div class="card"><span class="k">Surfaces</span><p>Every browser sees the whole room. There's no per-tablet scoping to one group yet.</p></div>
+    <div class="card"><span class="k">EPS firmware wishes (v2.3)</span><p>POWER_ON from partly-on that only adds missing outputs, a "busy" reply instead of dropping, a start offset per unit, and the firmware version in POWER_STATUS.</p></div>
+  </div>
+</section>
+
+<footer>
+  <p>Describes <strong>eXcontrol v0.3.1</strong>. The same material in plain text, with links to the code: <a href="https://github.com/daveleo/excontrol/blob/main/docs/POWER.md">docs/POWER.md</a>.</p>
+  <p><a href="./">← eXcontrol home</a> · <a href="power.html">Power, explained (overview)</a> · <a href="https://github.com/daveleo/excontrol">GitHub</a> · <a href="https://github.com/daveleo/excontrol/issues">Report an issue</a></p>
+</footer>
+
+</div>
+</body>
+</html>
