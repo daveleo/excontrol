@@ -1,7 +1,7 @@
 import type { ZoneState } from "@excontrol/shared";
 import type { DeviceConfig } from "../config.js";
 import { store } from "../core/state.js";
-import { getCachedZones } from "../core/deviceCache.js";
+import { getCachedZones, getCachedExtra } from "../core/deviceCache.js";
 import { BaseDriver } from "./types.js";
 
 /** Simulated device — `"simulated": true` on any device in the config. No network: state
@@ -30,6 +30,13 @@ export class SimDriver extends BaseDriver {
     // EPS relay zones always come from the config (their on/off follows the sim's bits).
     const cached = cfg.type === "expromo-eps" ? undefined : getCachedZones(cfg.id);
     this.zoneState = cached?.length ? cached : initialZones(cfg);
+    // A real EPS keeps its relays through a restart of eXcontrol (or of the machine it runs
+    // on) — so does the simulated one.
+    const bits = cfg.type === "expromo-eps" ? getCachedExtra(cfg.id)?.outputs : undefined;
+    if (typeof bits === "string" && /^[01]{6}$/.test(bits)) {
+      this.bits = bits;
+      this.zoneState = this.zoneState.map((z) => (z.relay ? { ...z, on: bits[z.relay - 1] === "1" } : z));
+    }
   }
 
   async start(): Promise<void> {
