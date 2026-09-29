@@ -561,6 +561,56 @@ operator's screen, three meanings of "Presets", and seven toolbar items. The 23 
 - Backend: `roomLabel()`, `DeviceTarget.heldBy`, `ZoneState.relay` for EPS output zones.
   No change to how anything is controlled.
 
+## Phase 15 — Raspberry Pi kiosk, simulated devices, preset visualization (branch `pi-kiosk`)  🧪
+
+Built 2026-09-29 on branch **`pi-kiosk`** (from v0.3.1), not merged. Proven on a Pi 5 with an
+iiyama touch monitor and against the real showroom H9. Details:
+[`PI-KIOSK.md`](PI-KIOSK.md), [`SIMULATED-DEVICES.md`](SIMULATED-DEVICES.md),
+[`PRESET-VISUALIZATION.md`](PRESET-VISUALIZATION.md).
+
+- **Pi appliance (P0 + most of the P2 kiosk):** Raspberry Pi OS Lite 64-bit (Trixie). The
+  backend runs as `excontrol.service`, and the local screen as `excontrol-kiosk.service`
+  (cage + Chromium on tty1). One-command dev install `pi/install.sh`; survives reboot
+  (~15 s to dashboard).
+- **Kiosk mode (`?kiosk=1`):** built-in on-screen keyboard (cage has none), no cursor on
+  touch (a transparent Xcursor theme plus a CSS-image arrow for a real mouse), no
+  pinch-zoom / overscroll / long-press menu.
+- **Simulated devices:** `"simulated": true` per device, with a Setup switch. An in-memory
+  driver for every type goes through the real power engine / groups / scenes / schedule
+  (EPS relays sequence, powered devices drop off and "boot"). Starts from the device cache.
+  Demo config and loader in `pi/demo/`.
+- **Preset visualization:** the H-series driver reads each preset's layers
+  (`/preset/readDetail`), the screen canvas (output cells) and input signal. **Customer view
+  `?view=simple`:** power bar, schedule, and every preset as a drawn thumbnail; tap to recall.
+- **Two shutdown bugs fixed (affect `main` too):** a connected dashboard hung shutdown *and*
+  the port-change rebind (`ws` v8 doesn't close clients on `wss.close()`), and the CLI
+  shutdown had no upper bound.
+
+### Merge plan → `main`
+
+Almost everything is platform-neutral. Suggested order, each step independently shippable:
+
+1. **Bug fixes (merge first, they fix the Windows build too):** `backend/src/api/ws.ts`
+   (terminate clients on detach) and `backend/src/cli.ts` (bounded shutdown). Smoke-test a
+   packaged Electron build: port change in Settings, and quit with a dashboard open.
+2. **Simulated devices:** `drivers/sim.ts`, `registry.ts`, `config.ts` / `shared/setup.ts`
+   (`simulated` flag and wizard round-trip), `setup/probe.ts`, the `presets.ts` scene
+   fallback, and the Setup switch in `SetupWizard.tsx`. Add unit tests for the sim
+   (EPS sequencing, power-loss → powered-off → boot → online).
+3. **Preset visualization + customer view:** `shared/src/index.ts` (`PresetLayer`,
+   `ZoneCanvas`), `drivers/novastar-h.ts` (layouts, canvas, signal), `PresetThumb.tsx`,
+   `SimpleView.tsx`, the `App.tsx` switch and the `styles.css` block. Before merging: unit tests
+   for `toCanvas` / normalisation, and decide how the view is chosen (a setting instead of
+   the URL). It works in the Electron build as-is (open `/?view=simple`).
+4. **Kiosk layer:** `lib/kiosk.ts`, `OnScreenKeyboard.tsx`, the `main.tsx` mount, the
+   `location.search` carry-over in the port-follow navigations, and the kiosk CSS. It is inert
+   without `?kiosk=1`, so it is safe on Windows; useful for Windows touch kiosks too.
+5. **Pi-only (`pi/`, `docs/PI-KIOSK.md`):** can merge any time (it adds files only), or stay on
+   the branch until the P1 `.deb` packaging exists.
+
+Nothing on the branch contains showroom credentials or internal addresses. The showroom
+copy used for testing lives only on the test Pi.
+
 ## Next up (as of v0.3.1)
 
 - ~~Release v0.3.1~~ — done 2026-09-29: GitHub Release published by the release workflow
@@ -579,6 +629,10 @@ operator's screen, three meanings of "Presets", and seven toolbar items. The 23 
   report firmware version and restore-after-reboot in POWER_STATUS.
 - UX follow-ups: cards on a phone collapse only on load (not on resize); the first-run
   wizard shares the new device list but not the Setup chrome.
+- `pi-kiosk` branch (Phase 15): merge per the plan above. Open items there: touch dead
+  after a Pi cold boot until the panel is re-plugged; the Pi P1 platform layer (.deb,
+  system user) and P3 network (DHCP → 192.168.0.99 fallback, Setup › Network with rollback);
+  the customer view as a setting; per-input customer names on thumbnails.
 
 ## Known gaps / decisions pending
 
