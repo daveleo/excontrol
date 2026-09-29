@@ -54,6 +54,10 @@ have any number of each.
   on by default, applies immediately without restarting the app.
 - **Integrates with Bitfocus Companion today** via its Generic HTTP module — see
   [`docs/COMPANION.md`](docs/COMPANION.md).
+- *(branch `pi-kiosk`)* **Raspberry Pi kiosk appliance**, **simulated devices** for demos,
+  and a **customer view** that draws every preset as a picture of its layout. See
+  [`docs/PI-KIOSK.md`](docs/PI-KIOSK.md), [`docs/SIMULATED-DEVICES.md`](docs/SIMULATED-DEVICES.md),
+  [`docs/PRESET-VISUALIZATION.md`](docs/PRESET-VISUALIZATION.md).
 - **Updates itself** — checks public GitHub Releases on launch, on demand from **Setup › System**,
   or from the tray; *Install now / Skip this version / Remind me later*, never a silent
   auto-install. Every open browser sees a small banner when one's waiting, even though
