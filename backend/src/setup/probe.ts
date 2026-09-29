@@ -18,6 +18,7 @@ const DEFAULT_PORT: Record<SetupDevice["type"], number> = {
 /** Test one device as the wizard has it on screen (kept-secret sentinels resolved). */
 export async function probeDevice(input: SetupDevice): Promise<ProbeResult> {
   const d = resolveSecrets(input);
+  if (d.simulated) return { ok: true, hint: "ok", detail: "Simulated device — nothing to connect to." };
   const host = (d.host || "").trim();
   const port = Number(d.port) || DEFAULT_PORT[d.type];
   if (!host) return { ok: false, hint: "misconfigured", detail: "Enter the device's IP address first." };

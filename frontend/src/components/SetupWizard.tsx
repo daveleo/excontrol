@@ -382,7 +382,7 @@ function DeviceForm({
       <button className="wd-row" onClick={() => setCollapsed((c) => !c)} aria-expanded={!collapsed}>
         <span className="wd-badge">{TYPE_SHORT[d.type]}</span>
         <span className="wd-name">{d.label || <span className="muted">Unnamed</span>}</span>
-        <span className="wd-addr muted small">{d.host || "no address"}:{d.port}</span>
+        <span className="wd-addr muted small">{d.simulated ? "simulated" : `${d.host || "no address"}:${d.port}`}</span>
         <span className="wd-power muted small">
           {d.type === "expromo-eps" ? "" : d.poweredBy
             ? `${epsDevices.find((e) => e.id === d.poweredBy)?.label ?? d.poweredBy}${d.poweredByOutput ? ` · out ${d.poweredByOutput}` : ""}`
@@ -576,6 +576,10 @@ function DeviceForm({
         <label className="switch-row">
           <label className="switch"><input type="checkbox" checked={d.enabled} onChange={(e) => onChange({ enabled: e.target.checked })} /><span /></label>
           {d.enabled ? "Enabled" : "Disabled — hidden from the dashboard"}
+        </label>
+        <label className="switch-row">
+          <label className="switch"><input type="checkbox" checked={!!d.simulated} onChange={(e) => onChange({ simulated: e.target.checked })} /><span /></label>
+          {d.simulated ? "Simulated — demo device, no network" : "Real device"}
         </label>
         <details className="wd-adv">
           <summary>Advanced</summary>
