@@ -1,5 +1,5 @@
 import type { AppState, DeviceState, PowerDomain } from "@excontrol/shared";
-import { roomLabel, ALL_GROUP } from "@excontrol/shared";
+import { roomLabel, ALL_GROUP, ALWAYS_ON_DOMAIN } from "@excontrol/shared";
 
 /**
  * One vocabulary for state, used by every card, row and bar — so "off" always looks and
@@ -85,10 +85,18 @@ export function roomStatus(state: AppState): Status & { name: string } {
     const epsOn = state.devices.some((d) => d.type === "expromo-eps" && String(d.extra?.outputs ?? "").includes("1"));
     return { name, word: epsOn ? "On" : "Off", tone: epsOn ? "on" : "off" };
   }
+  // Can't see the power unit and nothing is visibly on → don't guess "Standby" or "Off"
+  // (seen with the showroom EPS unreachable: the room was off, the bar said "Standby").
+  const blind = state.powerDomains.find((p) => p.level === "unknown" && p.id !== ALWAYS_ON_DOMAIN);
+  if (!on && blind) {
+    return { name, word: "Unknown", tone: "off", note: `Can't reach ${blind.label} — the screens' state isn't known` };
+  }
   if (on && !warn && !off) return { name, word: "On", tone: "on" };
   // Not "Partly on" — say what's actually different, so it's something you can act on.
   if (on) return { name, word: "On", tone: "on", note: exceptions(members, st) };
-  if (warn && !off) return { name, word: "Standby", tone: "warn" };
+  // "Standby" only for screens that really are dark-but-ready — not for ones still starting.
+  const dark = st.filter((s) => s.word === "Standby" || s.word === "Black").length;
+  if (warn && !off) return dark ? { name, word: "Standby", tone: "warn" } : { name, word: "Starting…", tone: "warn" };
   return { name, word: "Off", tone: "off" };
 }
 
