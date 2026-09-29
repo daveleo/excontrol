@@ -7,7 +7,7 @@ import { SchedulerPanel } from "./SchedulerPanel.js";
 import { ShutdownModal } from "./ShutdownModal.js";
 import { AlertPopup } from "./AlertPopup.js";
 import { ThemeToggle } from "./ThemeToggle.js";
-import { PresetThumb } from "./PresetThumb.js";
+import { PresetThumb, sourceColors } from "./PresetThumb.js";
 import { recallPreset } from "../api.js";
 
 /** The end-customer overlay (`?view=simple`): power, the schedule, and each screen's
@@ -25,6 +25,7 @@ export function SimpleView({ onUnauthorized }: { onUnauthorized: () => void }) {
   }
   // drawn layouts first — they're the point of this view
   screens.sort((a, b) => Number(!!b.zone.canvas) - Number(!!a.zone.canvas));
+  const colors = sourceColors(screens.flatMap(({ zone }) => zone.presets!.flatMap((p) => p.layers?.map((l) => l.source) ?? [])));
 
   const pick = async (d: DeviceState, z: ZoneState, presetId: number) => {
     const key = `${d.id}:${z.id}:${presetId}`;
@@ -83,7 +84,7 @@ export function SimpleView({ onUnauthorized }: { onUnauthorized: () => void }) {
                         disabled={!live}
                         onClick={() => void pick(device, zone, p.id)}
                       >
-                        {zone.canvas && <PresetThumb preset={p} canvas={zone.canvas} />}
+                        {zone.canvas && <PresetThumb preset={p} canvas={zone.canvas} colors={colors} />}
                         <span className="sv-name">
                           {p.name}
                           {active && <span className="sv-live">Live</span>}

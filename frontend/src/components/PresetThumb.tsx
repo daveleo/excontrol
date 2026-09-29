@@ -1,21 +1,24 @@
 import type { Preset, ZoneCanvas } from "@excontrol/shared";
 
 /** A preset drawn as a tiny screen: the output cells as a faint grid, each layer as a
- *  rounded window labelled with its input. Same input → same colour on every thumbnail,
- *  so a customer can follow "the laptop" from one layout to the next. */
+ *  rounded window labelled (top-left, like the controller's own UI) with its input. Same
+ *  input → same colour on every thumbnail, so a customer can follow "the laptop" from one
+ *  layout to the next. */
 
-const HUES = ["#4f86f3", "#2ea0a0", "#d29922", "#a371f7", "#e5689c", "#3fb950", "#f0883e"];
-const hueFor = (source: string) => {
-  let h = 0;
-  for (const c of source) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return HUES[h % HUES.length]!;
-};
+const HUES = ["#4f86f3", "#e0823d", "#2fb3a0", "#a371f7", "#e5689c", "#d4b12a", "#3fb950", "#6e8bd8"];
+
+/** Colours by input, handed out in sorted order over every input in use — distinct as long
+ *  as there are ≤ 8 inputs, and stable between thumbnails and screens. */
+export function sourceColors(sources: Iterable<string>): Map<string, string> {
+  const sorted = [...new Set(sources)].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  return new Map(sorted.map((s, i) => [s, HUES[i % HUES.length]!]));
+}
 /** "input 4-1" → "4-1"; custom input names stay as they are */
 const shortName = (s: string) => s.replace(/^input\s+/i, "");
 
 const H = 100; // viewBox height; width follows the canvas aspect
 
-export function PresetThumb({ preset, canvas }: { preset: Preset; canvas?: ZoneCanvas }) {
+export function PresetThumb({ preset, canvas, colors }: { preset: Preset; canvas?: ZoneCanvas; colors: Map<string, string> }) {
   const W = canvas ? (canvas.width / canvas.height) * H : (16 / 9) * H;
   const layers = preset.layers ?? [];
   const id = `hatch-${preset.id}-${Math.round(W)}`;
@@ -33,9 +36,9 @@ export function PresetThumb({ preset, canvas }: { preset: Preset; canvas?: ZoneC
       ))}
       {layers.map((l, i) => {
         const x = l.x * W, y = l.y * H, w = l.w * W, h = l.h * H;
-        const color = hueFor(l.source);
+        const color = colors.get(l.source) ?? HUES[0]!;
         const noSignal = l.signal === false;
-        const fs = Math.max(4.5, Math.min(11, h * 0.2, w * 0.14));
+        const fs = Math.max(4, Math.min(9, h * 0.22, w * 0.16));
         return (
           <g key={i}>
             <rect
@@ -43,10 +46,10 @@ export function PresetThumb({ preset, canvas }: { preset: Preset; canvas?: ZoneC
               fill={noSignal ? `url(#${id})` : color} fillOpacity={noSignal ? 1 : 0.82}
               stroke={color} strokeWidth="0.9" strokeOpacity={noSignal ? 0.7 : 1}
             />
-            {w > 14 && h > 9 && (
-              <text x={x + w / 2} y={y + h / 2} className="pthumb-label" fontSize={fs} dominantBaseline="central" textAnchor="middle">
+            {w > 12 && h > 8 && (
+              <text x={x + 2.2} y={y + 1.8 + fs * 0.5} className="pthumb-label" fontSize={fs} dominantBaseline="central">
                 {shortName(l.source)}
-                {noSignal && h > 22 && <tspan x={x + w / 2} dy={fs * 1.15} fontSize={fs * 0.7} className="pthumb-sub">no signal</tspan>}
+                {noSignal && h > 18 && <tspan x={x + 2.2} dy={fs * 1.2} fontSize={fs * 0.75} className="pthumb-sub">no signal</tspan>}
               </text>
             )}
           </g>
