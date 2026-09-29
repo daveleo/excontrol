@@ -51,6 +51,10 @@ export function attachWs(server: Server): () => void {
   return () => {
     clearInterval(ping);
     bus.off("broadcast", onBroadcast);
+    // ws v8 no longer closes live clients on wss.close() when attached to an external
+    // server — an open dashboard would then hold app.close() (shutdown, port rebind)
+    // open forever. Clients reconnect on their own.
+    for (const ws of wss.clients) ws.terminate();
     wss.close();
   };
 }
