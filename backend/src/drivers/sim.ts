@@ -44,6 +44,8 @@ export class SimDriver extends BaseDriver {
     const level = store.powerOf(this.id);
     if (level === "off") {
       this.poweredSince = 0;
+      // blackout is volatile on a real controller — it comes back lit after a power cycle
+      if (this.zoneState.some((z) => z.blackout)) this.zoneState = this.zoneState.map((z) => ({ ...z, blackout: false }));
       throw new Error("simulated: no power");
     }
     if (!this.poweredSince) this.poweredSince = Date.now();
