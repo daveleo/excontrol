@@ -3,8 +3,10 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App.js";
 import { OnScreenKeyboard } from "./components/OnScreenKeyboard.js";
 import { IS_KIOSK, initKiosk } from "./lib/kiosk.js";
+import { applyStoredTheme } from "./components/ThemeToggle.js";
 import "./styles.css";
 
+applyStoredTheme();
 initKiosk();
 
 createRoot(document.getElementById("root")!).render(

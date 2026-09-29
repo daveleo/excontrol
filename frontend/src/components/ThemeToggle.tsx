@@ -12,6 +12,13 @@ function getStored(): Theme | null {
   }
 }
 
+/** Apply the remembered theme at start-up — not only when the toggle is on screen. The
+ *  customer view has no toggle, and switching views must not change the look. */
+export function applyStoredTheme(): void {
+  const t = getStored();
+  if (t) document.documentElement.setAttribute("data-theme", t);
+}
+
 function systemPrefersDark(): boolean {
   return typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches;
 }
