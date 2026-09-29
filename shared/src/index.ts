@@ -89,6 +89,11 @@ export interface DeviceState {
    *  every output of that EPS not claimed by another device's poweredByOutput. */
   poweredByOutput?: number | null;
   zones: ZoneState[];
+  /** presets hidden from both dashboards ("zoneId:presetId") — service/test looks stay
+   *  usable in scenes and Setup, but customers and operators don't see them */
+  hiddenPresets?: string[];
+  /** customer names for inputs, keyed by the controller's input name ("input 4-1" → "Laptop") */
+  inputNames?: Record<string, string>;
   /** device-type extras: EPS status fields, OBS programScene, … */
   extra?: Record<string, unknown>;
 }
@@ -187,6 +192,22 @@ export const ALL_GROUP = "all";
 
 /** What the room-wide group is called on screen: the installation's display name (e.g.
  *  "Showroom"), or "Everything" while it still has the product's default name. */
+/** Does this device *report* its current preset/input (OBS program scene, eXview source)?
+ *  H-series and COEX don't: their highlighted preset is only the one eXcontrol last recalled. */
+export const reportsActivePreset = (type: DeviceType): boolean => type === "obs" || type === "exview";
+
+export const presetKey = (zoneId: string, presetId: number) => `${zoneId}:${presetId}`;
+
+/** A zone's presets as the dashboards show them: without the hidden ones. */
+export function visiblePresets(d: Pick<DeviceState, "hiddenPresets">, z: ZoneState): Preset[] {
+  const hidden = new Set(d.hiddenPresets ?? []);
+  return (z.presets ?? []).filter((p) => !hidden.has(presetKey(z.id, p.id)));
+}
+
+/** The name a customer knows an input by. */
+export const inputName = (d: Pick<DeviceState, "inputNames">, source: string): string =>
+  d.inputNames?.[source]?.trim() || source.replace(/^input\s+/i, "");
+
 export function roomLabel(appName?: string): string {
   const n = (appName ?? "").trim();
   return !n || n.toLowerCase() === "excontrol" ? "Everything" : n;

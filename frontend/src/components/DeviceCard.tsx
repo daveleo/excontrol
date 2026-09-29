@@ -1,5 +1,7 @@
 import { useRef, useState } from "react";
 import type { DeviceState, ZoneState, DeviceTarget } from "@excontrol/shared";
+import { visiblePresets, reportsActivePreset, inputName } from "@excontrol/shared";
+import { PresetThumb, sourceColors } from "./PresetThumb.js";
 import { setBrightness, setVolume, recallPreset, setBlackout, setPowerState } from "../api.js";
 import { deviceStatus, lastKnown } from "../lib/status.js";
 
@@ -67,6 +69,7 @@ export function DeviceCard({
 
       {online && device.type === "obs" && (
         <Options
+          device={device}
           zone={device.zones[0]}
           disabled={busy}
           onPick={(id) => guard(() => recallPreset(device.id, device.zones[0]?.id, id))()}
@@ -92,6 +95,7 @@ export function DeviceCard({
                 <PercentSlider label="Volume" value={z.volume} disabled={busy} onCommit={(v) => guard(() => setVolume(device.id, z.id, v))()} />
               )}
               <Options
+                device={device}
                 zone={z}
                 label={device.type === "exview" ? "Input" : "Presets"}
                 disabled={busy}
@@ -147,28 +151,39 @@ function Picture({
 }
 
 function Options({
-  zone, label, disabled, onPick,
+  device, zone, label, disabled, onPick,
 }: {
+  device: DeviceState;
   zone?: ZoneState;
   label?: string;
   disabled: boolean;
   onPick: (id: number) => void;
 }) {
-  if (!zone?.presets?.length) return null;
+  if (!zone) return null;
+  const presets = visiblePresets(device, zone); // hidden service/test presets left out
+  if (!presets.length) return null;
+  // OBS / eXview report what's on screen; for H-series / COEX the highlight is only the last
+  // preset recalled from here — say so instead of implying it's live.
+  const confirmed = reportsActivePreset(device.type);
+  const pictures = !!zone.canvas && presets.some((p) => p.layers?.length);
+  const colors = pictures ? sourceColors(presets.flatMap((p) => p.layers?.map((l) => l.source) ?? [])) : undefined;
   return (
     <div className="dc-opts">
-      {label && <div className="dc-label">{label}</div>}
-      <div className="dc-opt-row">
-        {zone.presets.map((p) => (
+      {label && <div className="dc-label">{label}{!confirmed && zone.activePreset != null && <span className="dc-label-note"> · highlighted = last chosen</span>}</div>}
+      <div className={`dc-opt-row${pictures ? " dc-opt-pictures" : ""}`}>
+        {presets.map((p) => (
           <button
             key={p.id}
-            className={zone.activePreset === p.id ? "opt active" : "opt"}
+            className={`${zone.activePreset === p.id ? "opt active" : "opt"}${pictures ? " opt-thumb" : ""}`}
             disabled={disabled}
             onClick={() => onPick(p.id)}
             title={p.hasSignal == null ? undefined : p.hasSignal ? "Signal present" : "No signal"}
           >
-            {p.hasSignal != null && <span className={`sig ${p.hasSignal ? "live" : ""}`} aria-hidden />}
-            {p.name}
+            {pictures && <PresetThumb preset={p} canvas={zone.canvas} colors={colors!} nameOf={(s) => inputName(device, s)} />}
+            <span className="opt-name">
+              {p.hasSignal != null && <span className={`sig ${p.hasSignal ? "live" : ""}`} aria-hidden />}
+              {p.name}
+            </span>
           </button>
         ))}
       </div>

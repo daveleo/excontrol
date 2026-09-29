@@ -50,6 +50,8 @@ export async function startDevices(cfg: AppConfig): Promise<void> {
       status: "connecting",
       poweredBy: d.poweredBy ?? null,
       poweredByOutput: d.poweredBy ? (d.poweredByOutput ?? null) : null,
+      hiddenPresets: d.hiddenPresets,
+      inputNames: d.inputNames,
       zones: cachedZones ?? [],
       extra: getCachedExtra(d.id),
       lastSeen: cachedZones ? getCachedLastSeen(d.id) : undefined,

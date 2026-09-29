@@ -7,7 +7,7 @@ import { roomLabel, ALL_GROUP } from "@excontrol/shared";
  * starting, changing), fault = red. Red means someone needs to look; nothing else is red.
  */
 export type Tone = "on" | "off" | "warn" | "fault";
-export interface Status { word: string; tone: Tone; hint?: string; detail?: string }
+export interface Status { word: string; tone: Tone; hint?: string; detail?: string; note?: string }
 
 export const isDisplay = (d: DeviceState) =>
   d.type === "novastar-h" || d.type === "novastar-coex" || d.type === "exview";
@@ -86,9 +86,20 @@ export function roomStatus(state: AppState): Status & { name: string } {
     return { name, word: epsOn ? "On" : "Off", tone: epsOn ? "on" : "off" };
   }
   if (on && !warn && !off) return { name, word: "On", tone: "on" };
-  if (on) return { name, word: "Partly on", tone: "on" };
+  // Not "Partly on" — say what's actually different, so it's something you can act on.
+  if (on) return { name, word: "On", tone: "on", note: exceptions(members, st) };
   if (warn && !off) return { name, word: "Standby", tone: "warn" };
   return { name, word: "Off", tone: "off" };
+}
+
+/** "LED wall is dark" / "LED wall and Floor are dark" / "3 screens aren't on". */
+function exceptions(members: DeviceState[], st: Status[]): string {
+  const notOn = members.map((d, i) => ({ d, s: st[i]! })).filter((x) => x.s.tone !== "on");
+  const how = (s: Status) => (s.word === "Black" ? "dark" : s.word === "No power" ? "off" : s.word.toLowerCase().replace("…", ""));
+  if (notOn.length > 2) return `${notOn.length} screens aren't on`;
+  const same = notOn.every((x) => how(x.s) === how(notOn[0]!.s));
+  if (notOn.length === 2 && same) return `${notOn[0]!.d.label} and ${notOn[1]!.d.label} are ${how(notOn[0]!.s)}`;
+  return notOn.map((x) => `${x.d.label} is ${how(x.s)}`).join(" · ");
 }
 
 /** Things that need a person — the only red on the dashboard. */

@@ -41,6 +41,9 @@ export interface SetupDevice {
   poweredByOutput?: number | null;
   /** demo device, in-memory (backend drivers/sim.ts) — carried through a wizard save */
   simulated?: boolean;
+  /** see DeviceState.hiddenPresets / inputNames */
+  hiddenPresets?: string[];
+  inputNames?: Record<string, string>;
   /** H-series */
   pId?: string;
   secretKey?: string; // may be SECRET_KEPT

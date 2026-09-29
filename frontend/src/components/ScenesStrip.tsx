@@ -31,6 +31,7 @@ export function ScenesStrip({ state }: { state: AppState }) {
           {busy === p.id ? "Applying…" : done === p.id ? "Applied ✓" : p.label}
         </button>
       ))}
+      {state.presets.some((p) => p.powerOnDefaultFor) && <span className="scenes-legend">★ starts with the room</span>}
     </section>
   );
 }

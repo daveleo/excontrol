@@ -863,3 +863,25 @@ button.dc-head:focus-visible { outline: 2px solid var(--accent); outline-offset:
   background: color-mix(in srgb, var(--warn) 14%, var(--panel)); border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line));
 }
 .recovery-banner code { font-size: 12.5px; }
+.scenes-legend { font-size: 12px; color: var(--muted); margin-left: 4px; }
+.sv-state.off { color: var(--muted); }
+.sv-last {
+  flex: none; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600;
+  color: var(--muted); border: 1px solid var(--line); background: var(--panel-2);
+}
+.sv-tile.active:has(.sv-last) { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); box-shadow: var(--shadow); }
+/* press-and-hold view switch: a quiet fill while holding, nothing otherwise */
+.brand { user-select: none; -webkit-user-select: none; touch-action: none; }
+.brand.holding { opacity: 0.55; transition: opacity 2s linear; }
+/* preset pictures inside the standard dashboard's device cards */
+.dc-opt-pictures { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.opt.opt-thumb { display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: 6px; text-align: left; }
+.opt.opt-thumb .pthumb { border-radius: 6px; }
+.opt-thumb .opt-name { font-size: 12.5px; padding: 0 2px 1px; }
+.dc-label-note { text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--muted); }
+/* Setup › device › On the dashboard */
+.wd-dash { padding: 4px 14px 12px; display: flex; flex-direction: column; gap: 6px; }
+.wd-dash-title { font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-top: 6px; }
+.wd-dash-list { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.wd-check { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; }
+.wd-inputs { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }

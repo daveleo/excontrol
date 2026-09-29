@@ -16,6 +16,7 @@ import { ThemeToggle } from "./components/ThemeToggle.js";
 import { AccessGate } from "./components/AccessGate.js";
 import { SimpleView } from "./components/SimpleView.js";
 import { RecoveryBanner } from "./components/RecoveryBanner.js";
+import { IS_SIMPLE_VIEW, switchView, useHold } from "./lib/viewSwitch.js";
 import { BRAND } from "@excontrol/shared";
 import { isDisplay } from "./lib/status.js";
 import { useNarrow } from "./lib/useNarrow.js";
@@ -65,19 +66,16 @@ export function App() {
   if (authPhase === "locked") {
     return <AccessGate onUnlocked={() => setAuthPhase("open")} />;
   }
-  if (SIMPLE_VIEW) return <SimpleView onUnauthorized={handleUnauthorized} />;
+  if (IS_SIMPLE_VIEW) return <SimpleView onUnauthorized={handleUnauthorized} />;
   return <Dashboard onUnauthorized={handleUnauthorized} />;
 }
-
-/** End-customer overlay — power, schedule and preset pictures only (components/SimpleView). */
-const SIMPLE_VIEW = new URLSearchParams(location.search).get("view") === "simple";
 
 function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
   const { state, connected, toasts, dismiss } = useShowroom(onUnauthorized);
   const [panel, setPanel] = useState<null | "schedule" | "setup">(null);
   const narrow = useNarrow();
+  const hold = useHold(switchView);
 
-  const scheduleCount = state?.schedule.entries.filter((e) => e.enabled).length ?? 0;
   const firstRun = !!state && !state.app.configured;
   const locked = state?.app.settingsLocked ?? false;
   const epsOff = new Set((state?.powerDomains ?? []).filter((d) => d.level === "off").map((d) => d.id));
@@ -95,15 +93,16 @@ function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand">
-          <span className="dot" data-on={connected} title={connected ? "connected" : "reconnecting…"} />
+        {/* press and hold: switch to the customer view (presenter gesture) */}
+        <div className={`brand ${hold.holding ? "holding" : ""}`} {...hold.bind}>
+          {/* only worth a glance when something's wrong */}
+          {!connected && <span className="dot" data-on={false} title="reconnecting…" />}
           {BRAND.name}
         </div>
         <div className="toolbar">
           <button className="icon-text-btn" title="Schedule" disabled={!state || firstRun} onClick={() => setPanel(panel === "schedule" ? null : "schedule")}>
             <ClockIcon />
             <span className="btn-label">Schedule</span>
-            {scheduleCount > 0 && <span className="badge">{scheduleCount}</span>}
           </button>
           <button className="icon-text-btn" title="Setup" disabled={!state} onClick={() => void openSetup()}>
             <GearIcon />

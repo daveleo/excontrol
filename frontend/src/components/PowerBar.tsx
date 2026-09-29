@@ -44,6 +44,14 @@ export function PowerBar({ state }: { state: AppState }) {
   const since = all?.setAt && all.target ? `since ${hhmm(all.setAt)} · ${sourceOf(all.setBy)}` : "";
   const fault = faults(state);
 
+  // "+1 hour" and a countdown only matter shortly before the shutdown, not a day ahead.
+  const SOON_MS = 2 * 3_600_000;
+  const soon = !!shutdown && shutdown.at.getTime() - now.getTime() < SOON_MS;
+  // One line of what the second tap will do — the three dark states aren't obvious.
+  const armedHint = armed === "off"
+    ? "Cuts the power. Starting again takes about a minute."
+    : armed === "standby" ? "Screens go dark but stay ready — back in seconds." : "";
+
   const label = (t: PowerTarget) =>
     armed === t ? (t === "off" ? "Tap again to turn off" : "Tap again for standby") : t === "on" ? "Turn on" : t === "off" ? "Turn off" : "Standby";
 
@@ -55,9 +63,13 @@ export function PowerBar({ state }: { state: AppState }) {
           <span className={`sdot ${rs.tone}`} aria-hidden />
           {rs.word}
         </div>
-        {rs.detail
-          ? <div className="pbar-sub warn"><span className="pb-spinner small" aria-hidden />{rs.detail}</div>
-          : since && <div className="pbar-sub">{since}</div>}
+        {armedHint
+          ? <div className="pbar-sub">{armedHint}</div>
+          : rs.detail
+            ? <div className="pbar-sub warn"><span className="pb-spinner small" aria-hidden />{rs.detail}</div>
+            : rs.note
+              ? <div className="pbar-sub">{rs.note}</div>
+              : since && <div className="pbar-sub">{since}</div>}
       </div>
       <div className="pbar-actions">
         <button className={`pbar-btn ${armed === "standby" ? "armed" : ""}`} disabled={busy} onClick={() => void go("standby")}>
@@ -78,12 +90,12 @@ export function PowerBar({ state }: { state: AppState }) {
             <span>
               {shutdown.entry?.action === "standby" ? "Goes to standby" : "Turns off"} <b>{whenPhrase(shutdown.at, now)}</b>
               {shutdown.entry && shutdown.entry.target && shutdown.entry.target !== "all" && <> · {scheduleTargetLabel(state, shutdown.entry.target)}</>}
-              {" · "}in {humanDuration(shutdown.at.getTime() - now.getTime())}
+              {soon && <>{" · "}in {humanDuration(shutdown.at.getTime() - now.getTime())}</>}
               {extended && <span className="pbar-ext"> · extended +{shutdown.extendedHours} h</span>}
             </span>
             <span className="pbar-next-actions">
               {extended && <button className="linkish" disabled={busy} onClick={act(cancelShutdownExtension)}>Undo extension</button>}
-              <button className="pbar-small" disabled={busy} onClick={act(() => snoozeShutdown(1))}>+1 hour</button>
+              {(soon || extended) && <button className="pbar-small" disabled={busy} onClick={act(() => snoozeShutdown(1))}>+1 hour</button>}
             </span>
           </>
         ) : powerOn ? (

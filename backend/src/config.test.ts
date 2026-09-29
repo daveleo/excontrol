@@ -26,6 +26,7 @@ const dev = (p: Partial<SetupDevice>): SetupDevice => ({
   poweredBy: p.poweredBy, pId: p.pId, secretKey: p.secretKey, encrypted: p.encrypted,
   password: p.password, zones: p.zones,
   independentOutputs: p.independentOutputs, outputs: p.outputs,
+  hiddenPresets: p.hiddenPresets, inputNames: p.inputNames,
 });
 
 describe("applySetup — validation", () => {
@@ -173,5 +174,28 @@ describe("EPS independent output control", () => {
         })],
       }),
     ).toThrow(/duplicate output index/i);
+  });
+});
+
+describe("dashboard presentation settings (hidden presets, input names)", () => {
+  it("round-trip through a wizard save, junk dropped", () => {
+    applySetup({
+      devices: [dev({
+        id: "h9", type: "novastar-h", host: "10.0.0.10", port: 8000, pId: "p", secretKey: "12345678",
+        zones: [{ id: "s0", label: "Main", screenId: 0 }],
+        hiddenPresets: ["s0:3", "s0:3", "bad", "s0:x", "s1:7"],
+        inputNames: { "input 4-1": "  Laptop  ", "input 4-2": "", "input 2-2": "x".repeat(80) },
+      } as Partial<SetupDevice>)],
+    });
+    const d = toSetupState().devices[0]!;
+    expect(d.hiddenPresets).toEqual(["s0:3", "s1:7"]);
+    expect(d.inputNames).toEqual({ "input 4-1": "Laptop", "input 2-2": "x".repeat(40) });
+    expect(getConfig().devices[0]!.hiddenPresets).toEqual(["s0:3", "s1:7"]);
+  });
+
+  it("empty settings aren't written at all", () => {
+    applySetup({ devices: [dev({ id: "e", hiddenPresets: [], inputNames: {} } as Partial<SetupDevice>)] });
+    expect("hiddenPresets" in getConfig().devices[0]!).toBe(false);
+    expect("inputNames" in getConfig().devices[0]!).toBe(false);
   });
 });

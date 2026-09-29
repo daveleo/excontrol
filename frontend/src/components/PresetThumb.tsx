@@ -18,7 +18,15 @@ const shortName = (s: string) => s.replace(/^input\s+/i, "");
 
 const H = 100; // viewBox height; width follows the canvas aspect
 
-export function PresetThumb({ preset, canvas, colors }: { preset: Preset; canvas?: ZoneCanvas; colors: Map<string, string> }) {
+export function PresetThumb({
+  preset, canvas, colors, nameOf = shortName,
+}: {
+  preset: Preset;
+  canvas?: ZoneCanvas;
+  colors: Map<string, string>;
+  /** the customer's name for an input (Setup › device › Input names) */
+  nameOf?: (source: string) => string;
+}) {
   const W = canvas ? (canvas.width / canvas.height) * H : (16 / 9) * H;
   const layers = preset.layers ?? [];
   const id = `hatch-${preset.id}-${Math.round(W)}`;
@@ -48,7 +56,7 @@ export function PresetThumb({ preset, canvas, colors }: { preset: Preset; canvas
             />
             {w > 12 && h > 8 && (
               <text x={x + 2.2} y={y + 1.8 + fs * 0.5} className="pthumb-label" fontSize={fs} dominantBaseline="central">
-                {shortName(l.source)}
+                {nameOf(l.source)}
                 {noSignal && h > 18 && <tspan x={x + 2.2} dy={fs * 1.2} fontSize={fs * 0.75} className="pthumb-sub">no signal</tspan>}
               </text>
             )}

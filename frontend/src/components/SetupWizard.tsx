@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { DashboardOptions } from "./DashboardOptions.js";
 import type { DeviceType, SetupDevice, SetupState, SetupZone, SetupEpsOutput, ProbeResult, ScanHit, DeviceState } from "@excontrol/shared";
 import { deviceStatus } from "../lib/status.js";
 import { getSetupState, probeDevice, scanNetwork, saveSetup } from "../api.js";
@@ -571,6 +572,8 @@ function DeviceForm({
           </div>
         </div>
       )}
+
+      <DashboardOptions d={d} live={live} onChange={onChange} />
 
       <div className="wd-meta">
         <label className="switch-row">

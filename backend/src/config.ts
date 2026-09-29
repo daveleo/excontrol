@@ -57,6 +57,10 @@ export interface BaseDeviceConfig {
   poweredByOutput?: number | null;
   /** demo / proof-of-concept: an in-memory device, no network (drivers/sim.ts) */
   simulated?: boolean;
+  /** presets hidden from the dashboards, "zoneId:presetId" */
+  hiddenPresets?: string[];
+  /** customer names for inputs ("input 4-1" → "Laptop") */
+  inputNames?: Record<string, string>;
 }
 
 export interface HConfig extends BaseDeviceConfig {
@@ -273,6 +277,8 @@ function toSetupDevice(d: DeviceConfig): SetupDevice {
     poweredBy: d.poweredBy ?? null,
     poweredByOutput: d.poweredByOutput ?? null,
     ...(d.simulated ? { simulated: true } : {}),
+    ...(d.hiddenPresets?.length ? { hiddenPresets: d.hiddenPresets } : {}),
+    ...(d.inputNames && Object.keys(d.inputNames).length ? { inputNames: d.inputNames } : {}),
   };
   if (d.type === "novastar-h") {
     base.pId = d.pId;
@@ -312,6 +318,23 @@ export function resolveSecrets(input: SetupDevice): SetupDevice {
   return out;
 }
 
+/** Dashboard presentation settings from the wizard, validated: "zone:number" keys, short names. */
+function cleanPresentation(d: SetupDevice): Pick<BaseDeviceConfig, "hiddenPresets" | "inputNames"> {
+  const hidden = Array.isArray(d.hiddenPresets)
+    ? [...new Set(d.hiddenPresets.filter((k) => typeof k === "string" && /^[^:]{1,64}:-?\d{1,6}$/.test(k)))].slice(0, 500)
+    : [];
+  const names: Record<string, string> = {};
+  for (const [k, v] of Object.entries(d.inputNames ?? {})) {
+    const key = String(k).slice(0, 64);
+    const val = typeof v === "string" ? v.trim().slice(0, 40) : "";
+    if (key && val) names[key] = val;
+  }
+  return {
+    ...(hidden.length ? { hiddenPresets: hidden } : {}),
+    ...(Object.keys(names).length ? { inputNames: names } : {}),
+  };
+}
+
 /** Build a stored DeviceConfig from a wizard device (resolving kept secrets). */
 function fromSetupDevice(input: SetupDevice): DeviceConfig {
   const d = resolveSecrets(input);
@@ -327,6 +350,7 @@ function fromSetupDevice(input: SetupDevice): DeviceConfig {
     poweredByOutput: d.poweredBy && Number(d.poweredByOutput) >= 1 && Number(d.poweredByOutput) <= 6
       ? Number(d.poweredByOutput) : null,
     ...(d.simulated ? { simulated: true } : {}),
+    ...cleanPresentation(d),
   };
   switch (d.type) {
     case "novastar-h":
