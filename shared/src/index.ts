@@ -249,6 +249,18 @@ export interface AppInfo {
   configured: boolean;
   /** true → device setup / preset & schedule editing require the settings password */
   settingsLocked: boolean;
+  /** the config file was unusable at start-up; cleared by the next successful save */
+  configRecovery?: ConfigRecovery;
+}
+
+export interface ConfigRecovery {
+  at: number;
+  /** parse / validation error */
+  reason: string;
+  /** file name the damaged config was moved to (in the data folder) */
+  keptAs: string;
+  /** true → the last good copy was restored; false → started unconfigured */
+  restored: boolean;
 }
 
 export interface AppState {

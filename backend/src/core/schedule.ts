@@ -22,6 +22,19 @@ function persist(schedule: Schedule): Schedule {
   return schedule;
 }
 
+/** For the scheduler's own timer: bookkeeping (lastRun, a spent extension) must never throw
+ *  there — an unhandled rejection would take the whole process down. The in-memory schedule
+ *  is still updated; only persistence failed, and the operator is told. */
+function persistQuiet(schedule: Schedule): void {
+  try {
+    persist(schedule);
+  } catch (e) {
+    bus.emit("broadcast", { t: "schedule", schedule });
+    log.error({ err: e }, "could not save schedule state");
+    toast("error", "Couldn't save the schedule state to disk — check the storage");
+  }
+}
+
 export function setEntries(entries: ScheduleEntry[]): Schedule {
   const clean: ScheduleEntry[] = entries.map((e) => ({
     id: e.id || randomUUID(),
@@ -95,7 +108,7 @@ async function fire(e: Pick<ScheduleEntry, "action" | "label" | "target" | "pres
     log.error({ err }, "schedule action failed");
     toast("error", `${e.label}: ${err instanceof Error ? err.message : String(err)}`);
   }
-  persist({ ...getSchedule(), lastRun: { id: e.label, at: Date.now(), action: e.action } });
+  persistQuiet({ ...getSchedule(), lastRun: { id: e.label, at: Date.now(), action: e.action } });
 }
 
 function fmt(ts: number): string {
@@ -115,7 +128,7 @@ export function startScheduler(): () => void {
       // fire the extended entry itself — its own target and action, nothing wider
       const cur = getSchedule();
       const ext = cur.entries.find((x) => x.id === cur.snoozeEntryId);
-      persist({ ...cur, snoozeUntil: 0, snoozeHours: 0, snoozeEntryId: undefined });
+      persistQuiet({ ...cur, snoozeUntil: 0, snoozeHours: 0, snoozeEntryId: undefined });
       void fire(ext
         ? { ...ext, label: `${ext.label} (extended)` }
         : { action: "power_off", label: "Extended shutdown", target: "all" }); // pre-0.3 extension with no entry id

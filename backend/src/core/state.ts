@@ -6,7 +6,7 @@ import type {
 } from "@excontrol/shared";
 import { BRAND } from "@excontrol/shared";
 import { bus, type DevicePatch } from "./bus.js";
-import { getConfig, isConfigured, isSettingsLocked } from "../config.js";
+import { getConfig, getConfigRecovery, isConfigured, isSettingsLocked } from "../config.js";
 import { rememberZones } from "./deviceCache.js";
 import { log } from "../logger.js";
 
@@ -159,6 +159,7 @@ class Store {
       startedAt: this.startedAt,
       configured: isConfigured(),
       settingsLocked: isSettingsLocked(),
+      configRecovery: getConfigRecovery(),
     };
   }
 

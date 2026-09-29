@@ -5,6 +5,7 @@ After=excontrol.service systemd-user-sessions.service plymouth-quit-wait.service
 # Take tty1 over from the login prompt.
 Conflicts=getty@tty1.service
 After=getty@tty1.service
+StartLimitIntervalSec=0
 
 [Service]
 User=@USER@
@@ -24,6 +25,8 @@ ExecStartPre=+@APP_DIR@/pi/touch-reset.sh
 ExecStart=@APP_DIR@/pi/kiosk.sh
 Restart=always
 RestartSec=3
+RestartSteps=5
+RestartMaxDelaySec=30
 
 [Install]
 WantedBy=multi-user.target

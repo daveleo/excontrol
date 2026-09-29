@@ -15,6 +15,7 @@ import { UpdateBanner } from "./components/UpdateBanner.js";
 import { ThemeToggle } from "./components/ThemeToggle.js";
 import { AccessGate } from "./components/AccessGate.js";
 import { SimpleView } from "./components/SimpleView.js";
+import { RecoveryBanner } from "./components/RecoveryBanner.js";
 import { BRAND } from "@excontrol/shared";
 import { isDisplay } from "./lib/status.js";
 import { useNarrow } from "./lib/useNarrow.js";
@@ -116,6 +117,7 @@ function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
       {state && !connected && <div className="reconnect">Reconnecting to eXcontrol…</div>}
 
       {state?.updateInfo && <UpdateBanner info={state.updateInfo} />}
+      <RecoveryBanner recovery={state?.app.configRecovery} />
 
       {firstRun && <SetupWizardLoader onClose={() => setPanel(null)} epsOff={epsOff} />}
 

@@ -9,6 +9,7 @@ import { AlertPopup } from "./AlertPopup.js";
 import { ThemeToggle } from "./ThemeToggle.js";
 import { PresetThumb, sourceColors } from "./PresetThumb.js";
 import { recallPreset } from "../api.js";
+import { RecoveryBanner } from "./RecoveryBanner.js";
 
 /** The end-customer overlay (`?view=simple`): power, the schedule, and each screen's
  *  presets as pictures. No setup, no sliders, nothing to get wrong. */
@@ -58,6 +59,7 @@ export function SimpleView({ onUnauthorized }: { onUnauthorized: () => void }) {
 
       {!state && <p className="loading">Connecting…</p>}
       {state && !connected && <div className="reconnect">Reconnecting…</div>}
+      <RecoveryBanner recovery={state?.app.configRecovery} customer />
 
       {state && (
         <>

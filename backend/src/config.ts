@@ -1,11 +1,20 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync } from "node:fs";
+import { readFileSync, existsSync, mkdirSync, renameSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
 import type {
-  DeviceType, AppPreset, Schedule, SetupDevice, SetupState, SetupSaveBody, AppSettingsBody, GroupConfig,
+  DeviceType, AppPreset, Schedule, SetupDevice, SetupState, SetupSaveBody, AppSettingsBody, GroupConfig, ConfigRecovery,
 } from "@excontrol/shared";
 import { BRAND, SECRET_KEPT } from "@excontrol/shared";
 import { log } from "./logger.js";
+import { writeFileDurable } from "./core/durableWrite.js";
+
+/** The config change was applied in memory but could not be written to disk. */
+export class ConfigPersistError extends Error {
+  constructor(detail: string) {
+    super(`Couldn't save the settings to disk (${detail}) — the change is active until the next restart`);
+    this.name = "ConfigPersistError";
+  }
+}
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -124,23 +133,70 @@ const EMPTY_CONFIG: AppConfig = {
 /* ---------- load / save ---------- */
 
 let current: AppConfig = EMPTY_CONFIG;
+let recovery: ConfigRecovery | undefined;
+
+/** Set when the config file was unusable at start-up — shown to every browser until the next
+ *  successful save. */
+export function getConfigRecovery(): ConfigRecovery | undefined {
+  return recovery;
+}
+
+const lastGoodFile = () => join(getDataDir(), "excontrol.config.last-good.json");
+
+/** Parse + normalise + validate, or throw. A file that is valid JSON but fails validation
+ *  (e.g. two devices on one EPS output) used to throw *outside* the try → the backend exited
+ *  on every start: a permanent crash loop. */
+function readValidConfig(file: string): AppConfig {
+  const c = normalise(JSON.parse(readFileSync(file, "utf8")) as Partial<AppConfig>);
+  validate(c);
+  return c;
+}
+
+/** Keep a copy of the last config that loaded or saved cleanly. Written only on change. */
+function rememberGood(c: AppConfig): void {
+  const text = JSON.stringify(c, null, 2);
+  try {
+    if (existsSync(lastGoodFile()) && readFileSync(lastGoodFile(), "utf8") === text) return;
+    writeFileDurable(lastGoodFile(), text);
+  } catch (e) {
+    log.warn({ err: e }, "could not update the last-good config copy");
+  }
+}
 
 export function loadConfig(): AppConfig {
   const dir = getDataDir();
   const file = configFile();
   mkdirSync(dir, { recursive: true });
+  recovery = undefined;
   if (!existsSync(file)) {
     log.warn({ file }, "no config yet — starting unconfigured (setup wizard)");
     current = structuredClone(EMPTY_CONFIG);
     return current;
   }
   try {
-    current = normalise(JSON.parse(readFileSync(file, "utf8")) as Partial<AppConfig>);
+    current = readValidConfig(file);
+    rememberGood(current);
+    return current;
   } catch (e) {
-    log.error({ err: e, file }, "config unreadable — starting unconfigured");
+    // Never leave a damaged file where a later save would overwrite it — keep it for forensics.
+    const keptAs = `excontrol.config.damaged-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+    try {
+      renameSync(file, join(dir, keptAs));
+    } catch (e2) {
+      log.error({ err: e2 }, "could not move the damaged config aside");
+    }
+    recovery = { at: Date.now(), reason: e instanceof Error ? e.message.slice(0, 200) : String(e), keptAs, restored: false };
+    log.error({ err: e, file, keptAs }, "config unreadable or invalid — trying the last good copy");
+  }
+  try {
+    current = readValidConfig(lastGoodFile());
+    writeFileDurable(file, JSON.stringify(current, null, 2));
+    recovery!.restored = true;
+    log.warn({ keptAs: recovery!.keptAs }, "restored the last good config");
+  } catch (e) {
+    log.error({ err: e }, "no usable last-good config — starting unconfigured");
     current = structuredClone(EMPTY_CONFIG);
   }
-  validate(current);
   return current;
 }
 
@@ -155,11 +211,13 @@ export function saveConfig(next: AppConfig): AppConfig {
   const file = configFile();
   try {
     mkdirSync(getDataDir(), { recursive: true });
-    const tmp = file + ".tmp";
-    writeFileSync(tmp, JSON.stringify(next, null, 2));
-    renameSync(tmp, file);
+    writeFileDurable(file, JSON.stringify(next, null, 2));
+    rememberGood(next);
+    recovery = undefined; // a clean save supersedes the start-up recovery notice
   } catch (e) {
     log.error({ err: e, file }, "failed to persist config");
+    // The change is live in memory but would be lost on restart — the caller must say so.
+    throw new ConfigPersistError(e instanceof Error ? e.message : String(e));
   }
   return current;
 }

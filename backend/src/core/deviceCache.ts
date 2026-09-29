@@ -1,9 +1,10 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync } from "node:fs";
+import { readFileSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { ZoneState } from "@excontrol/shared";
 import { BRAND } from "@excontrol/shared";
 import { getDataDir } from "../config.js";
 import { log } from "../logger.js";
+import { writeFileDurable } from "./durableWrite.js";
 
 /**
  * Last-known zone state per device, persisted to disk so it survives a backend restart —
@@ -24,6 +25,10 @@ const cacheFile = () => join(getDataDir(), `${BRAND.slug}.device-cache.json`);
 let cache: DeviceCache = {};
 let loaded = false;
 let writeTimer: NodeJS.Timeout | undefined;
+let lazyTimer: NodeJS.Timeout | undefined;
+/** A lastSeen-only change is written at most this often. Measured on a Pi: writing on every
+ *  poll meant a rewrite every ~2 s (43 000/day) — needless SD-card wear. */
+const LASTSEEN_WRITE_MS = 5 * 60_000;
 
 function load(): DeviceCache {
   if (loaded) return cache;
@@ -58,12 +63,19 @@ export function rememberZones(
   extra?: Record<string, unknown>,
 ): void {
   if (zones.length === 0 && !extra) return; // nothing worth remembering yet
-  load()[id] = { zones, extra, lastSeen };
-  scheduleWrite();
+  const c = load();
+  const prev = c[id];
+  const same = !!prev && JSON.stringify(prev.zones) === JSON.stringify(zones) && JSON.stringify(prev.extra) === JSON.stringify(extra);
+  c[id] = { zones, extra, lastSeen };
+  if (same) scheduleLazyWrite();
+  else scheduleWrite();
 }
 
 /** Drop cache entries for devices no longer in the config (removed/renamed). */
 export function pruneCache(knownIds: string[]): void {
+  // No devices configured (first run, or a config that failed to load): pruning would wipe
+  // every device's last-known state for nothing — measured after a power-cut test.
+  if (knownIds.length === 0) return;
   const known = new Set(knownIds);
   const c = load();
   let changed = false;
@@ -74,6 +86,15 @@ export function pruneCache(knownIds: string[]): void {
     }
   }
   if (changed) scheduleWrite();
+}
+
+function scheduleLazyWrite(): void {
+  if (writeTimer || lazyTimer) return;
+  lazyTimer = setTimeout(() => {
+    lazyTimer = undefined;
+    flushDeviceCache();
+  }, LASTSEEN_WRITE_MS);
+  lazyTimer.unref?.();
 }
 
 function scheduleWrite(): void {
@@ -90,12 +111,13 @@ export function flushDeviceCache(): void {
     clearTimeout(writeTimer);
     writeTimer = undefined;
   }
+  if (lazyTimer) {
+    clearTimeout(lazyTimer);
+    lazyTimer = undefined;
+  }
   try {
     mkdirSync(getDataDir(), { recursive: true });
-    const file = cacheFile();
-    const tmp = file + ".tmp";
-    writeFileSync(tmp, JSON.stringify(cache, null, 2));
-    renameSync(tmp, file);
+    writeFileDurable(cacheFile(), JSON.stringify(cache, null, 2));
   } catch (e) {
     log.error({ err: e, file: cacheFile() }, "failed to persist device cache");
   }
@@ -109,5 +131,9 @@ export function _resetForTest(): void {
   if (writeTimer) {
     clearTimeout(writeTimer);
     writeTimer = undefined;
+  }
+  if (lazyTimer) {
+    clearTimeout(lazyTimer);
+    lazyTimer = undefined;
   }
 }

@@ -856,3 +856,10 @@ button.dc-head:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .pthumb-sub { fill: #c9d1d9; font-weight: 500; }
 .pthumb-empty { fill: #6e7681; }
 .kiosk .sv-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+
+/* settings file recovered / unusable at start-up (RecoveryBanner) */
+.recovery-banner {
+  margin: 12px 0; padding: 12px 16px; border-radius: 12px; font-size: 14px; line-height: 1.45;
+  background: color-mix(in srgb, var(--warn) 14%, var(--panel)); border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line));
+}
+.recovery-banner code { font-size: 12.5px; }
