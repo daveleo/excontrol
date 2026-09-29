@@ -563,8 +563,9 @@ operator's screen, three meanings of "Presets", and seven toolbar items. The 23 
 
 ## Next up (as of v0.3.1)
 
-- Release: v0.3.1 is on `main` but **not tagged** — pushing tag `v0.3.1` publishes the
-  installer as a GitHub Release (needs a go-ahead; it's public).
+- ~~Release v0.3.1~~ — done 2026-09-29: GitHub Release published by the release workflow
+  (installer + `latest.yml`). Site: `power.html` (customer explainer) and
+  `power-details.html` (technical).
 - Live-test the power groups on real hardware end to end (highest-wins demo, Everything →
   Off/On with two EPS units, the "turned on after its scheduled off" pop-up) — the driver is
   verified on a real EPS, the engine so far in tests and a local smoke run.
