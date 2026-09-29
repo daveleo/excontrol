@@ -39,6 +39,8 @@ export interface SetupDevice {
   poweredBy?: string | null;
   /** 1-6, or null/undefined for "whole unit" */
   poweredByOutput?: number | null;
+  /** demo device, in-memory (backend drivers/sim.ts) — carried through a wizard save */
+  simulated?: boolean;
   /** H-series */
   pId?: string;
   secretKey?: string; // may be SECRET_KEPT

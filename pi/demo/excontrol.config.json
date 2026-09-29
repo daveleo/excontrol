@@ -1,0 +1,78 @@
+{
+  "devices": [
+    {
+      "id": "eps", "type": "expromo-eps", "label": "EPS power", "enabled": true, "simulated": true,
+      "host": "192.0.2.20", "port": 5000, "poweredBy": null,
+      "independentOutputs": true,
+      "outputs": [
+        { "id": "out1", "label": "Main wall (H9)", "index": 1 },
+        { "id": "out2", "label": "Side wall (H-2)", "index": 2 },
+        { "id": "out3", "label": "eXview", "index": 3 },
+        { "id": "out4", "label": "Floor (MX40)", "index": 4 },
+        { "id": "out5", "label": "Network switch", "index": 5, "protected": true },
+        { "id": "out6", "label": "Spare", "index": 6 }
+      ]
+    },
+    {
+      "id": "h9", "type": "novastar-h", "label": "H9 — Main wall", "enabled": true, "simulated": true,
+      "host": "192.0.2.10", "port": 8001, "poweredBy": "eps", "poweredByOutput": 1,
+      "pId": "demo", "secretKey": "demo",
+      "zones": [
+        { "id": "main", "label": "Main wall", "screenId": 0 },
+        { "id": "ceiling", "label": "Ceiling strip", "screenId": 1 }
+      ]
+    },
+    {
+      "id": "h2", "type": "novastar-h", "label": "H-2 — Side wall", "enabled": true, "simulated": true,
+      "host": "192.0.2.11", "port": 8001, "poweredBy": "eps", "poweredByOutput": 2,
+      "pId": "demo", "secretKey": "demo",
+      "zones": [{ "id": "side", "label": "Side wall", "screenId": 0 }]
+    },
+    {
+      "id": "exview", "type": "exview", "label": "eXview Edge", "enabled": true, "simulated": true,
+      "host": "192.0.2.30", "port": 8600, "poweredBy": "eps", "poweredByOutput": 3, "model": "edge"
+    },
+    {
+      "id": "mx40", "type": "novastar-coex", "label": "MX40 — Floor", "enabled": true, "simulated": true,
+      "host": "192.0.2.15", "port": 8001, "poweredBy": "eps", "poweredByOutput": 4,
+      "zones": [{ "id": "floor", "label": "Floor", "screenId": "demo-floor" }]
+    },
+    {
+      "id": "obs", "type": "obs", "label": "OBS Studio", "enabled": true, "simulated": true,
+      "host": "192.0.2.92", "port": 4455, "poweredBy": null, "password": ""
+    }
+  ],
+  "groups": [
+    { "id": "walls", "label": "LED walls", "members": ["h9", "h2", "mx40"] },
+    { "id": "signage", "label": "Signage", "members": ["exview"] }
+  ],
+  "presets": [
+    {
+      "id": "demo", "label": "Showroom demo", "powerOnDefaultFor": "all",
+      "actions": [
+        { "target": "h9:main", "brightness": 80, "preset": 0 },
+        { "target": "h9:ceiling", "brightness": 70 },
+        { "target": "h2:side", "brightness": 80, "preset": 1 },
+        { "target": "mx40:floor", "brightness": 60 },
+        { "target": "obs", "scene": "Showreel" }
+      ]
+    },
+    {
+      "id": "evening", "label": "Evening (dim)",
+      "actions": [
+        { "target": "h9:main", "brightness": 35 },
+        { "target": "h9:ceiling", "brightness": 25 },
+        { "target": "h2:side", "brightness": 35 },
+        { "target": "mx40:floor", "brightness": 25 },
+        { "target": "obs", "scene": "Product loop" }
+      ]
+    }
+  ],
+  "schedule": {
+    "entries": [
+      { "id": "on-weekdays", "label": "Morning on", "time": "08:00", "days": [1, 2, 3, 4, 5], "action": "power_on", "target": "all", "enabled": true },
+      { "id": "off-17", "label": "Power off", "time": "17:00", "days": [0, 1, 2, 3, 4, 6], "action": "power_off", "target": "all", "enabled": true },
+      { "id": "off-fri", "label": "Power off (Friday)", "time": "15:30", "days": [5], "action": "power_off", "target": "all", "enabled": true }
+    ]
+  }
+}

@@ -6,6 +6,7 @@ import { NovastarCoexDriver } from "../drivers/novastar-mx40.js";
 import { EpsDriver } from "../drivers/eps.js";
 import { ObsDriver } from "../drivers/obs.js";
 import { ExviewDriver } from "../drivers/exview.js";
+import { SimDriver } from "../drivers/sim.js";
 import { store } from "./state.js";
 import { bus } from "./bus.js";
 import { recomputePower } from "./power.js";
@@ -13,6 +14,7 @@ import { getCachedZones, getCachedExtra, getCachedLastSeen, pruneCache, flushDev
 import { log } from "../logger.js";
 
 function build(cfg: DeviceConfig): Driver {
+  if (cfg.simulated) return new SimDriver(cfg);
   switch (cfg.type) {
     case "novastar-h": return new NovastarHDriver(cfg);
     case "novastar-coex": return new NovastarCoexDriver(cfg);

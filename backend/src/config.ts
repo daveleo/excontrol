@@ -46,6 +46,8 @@ export interface BaseDeviceConfig {
   /** the relay (1-6) of that EPS this device hangs off; null = the whole unit (every output
    *  no other device claims). */
   poweredByOutput?: number | null;
+  /** demo / proof-of-concept: an in-memory device, no network (drivers/sim.ts) */
+  simulated?: boolean;
 }
 
 export interface HConfig extends BaseDeviceConfig {
@@ -212,6 +214,7 @@ function toSetupDevice(d: DeviceConfig): SetupDevice {
     port: d.port,
     poweredBy: d.poweredBy ?? null,
     poweredByOutput: d.poweredByOutput ?? null,
+    ...(d.simulated ? { simulated: true } : {}),
   };
   if (d.type === "novastar-h") {
     base.pId = d.pId;
@@ -265,6 +268,7 @@ function fromSetupDevice(input: SetupDevice): DeviceConfig {
     poweredBy: d.poweredBy || null,
     poweredByOutput: d.poweredBy && Number(d.poweredByOutput) >= 1 && Number(d.poweredByOutput) <= 6
       ? Number(d.poweredByOutput) : null,
+    ...(d.simulated ? { simulated: true } : {}),
   };
   switch (d.type) {
     case "novastar-h":

@@ -72,6 +72,13 @@ async function runAction(a: PresetAction): Promise<void> {
     await drv.recallPreset("scenes", id);
     return;
   }
+  if (a.scene != null && drv.type === "obs") {
+    // simulated OBS (drivers/sim.ts) — scenes are its zone's presets
+    const id = drv.zones()[0]?.presets?.find((p) => p.name === a.scene)?.id;
+    if (id == null || !drv.recallPreset) throw new Error(`OBS: scene "${a.scene}" not found`);
+    await drv.recallPreset("scenes", id);
+    return;
+  }
 
   const zoneId = zoneRef ?? drv.zones()[0]?.id;
   if (!zoneId) throw new Error(`${deviceId}: no zone to act on`);
