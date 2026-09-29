@@ -11,9 +11,16 @@ URL="http://localhost:$PORT"
 QUERY="kiosk=1"
 [ "${EXCONTROL_KIOSK_VIEW:-simple}" = "simple" ] && QUERY="$QUERY&view=simple"
 
-# Don't show Chromium's error page on boot — wait (up to 60 s) for the backend.
+# Wait for the backend however long it takes. With a time limit (it was 60 s), a backend that
+# is slow or crash-looping at boot left the customer looking at Chromium's white "This site
+# can't be reached — ERR_CONNECTION_REFUSED" page (measured). A dark screen until the app is
+# ready is better; once the page is loaded, the app handles backend restarts itself.
 i=0
-until curl -fs -o /dev/null "$URL" || [ $i -ge 60 ]; do i=$((i + 1)); sleep 1; done
+until curl -fs -o /dev/null "$URL"; do
+  i=$((i + 1))
+  [ $((i % 30)) -eq 0 ] && echo "kiosk: still waiting for the backend at $URL (${i} s)"
+  sleep 1
+done
 
 PROFILE="$HOME/.local/share/excontrol-kiosk"
 mkdir -p "$PROFILE"
