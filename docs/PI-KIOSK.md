@@ -95,3 +95,16 @@ showroom (the showroom's own eXcontrol is the only instance allowed against it).
 ### P7 — Validation
 72 h soak, 100× power-yank test, thermal in the target enclosure, SD vs NVMe endurance,
 2+ ELO models, DHCP-less site (fallback + RTC), and a network with no internet.
+
+## Status / known issues
+
+- ✅ P0 done 2026-09-29 on a Pi 5 + iiyama touch monitor (Pixart "Optical Touch", USB 093a:8020):
+  `pi/install.sh` → `excontrol.service` + `excontrol-kiosk.service`, survives reboot.
+- ✅ Kiosk mode (`?kiosk=1`): on-screen keyboard, no cursor on touch (transparent cursor theme +
+  CSS arrow for a real mouse), no pinch-zoom / overscroll / long-press menu.
+- ❗ **Touch dead after a cold boot until the USB cable is re-plugged.** At boot the panel binds
+  to `hid-generic` (~4.3 s), then re-binds to `hid-multitouch` (~5.2 s); cage starts at ~14 s
+  and libinput lists it as `touch`, yet no touches arrive until a replug. Suspects: the panel
+  needs its multitouch mode (HID feature report) set after the re-bind, or USB autosuspend.
+  Candidate fixes: `usbcore.autosuspend=-1` / per-device `power/control=on`, a udev rule that
+  re-binds (unbind/bind) the device once `hid-multitouch` has it, or `usbreset` in kiosk.sh.
