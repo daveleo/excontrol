@@ -70,6 +70,17 @@ describe("CSRF guard on /api", () => {
   });
 });
 
+describe("clickjacking / hygiene headers", () => {
+  it("every response forbids framing and sniffing", async () => {
+    for (const url of ["/health", "/api/state", "/api/auth/status"]) {
+      const r = await app.inject({ method: "GET", url, headers: { host: HOST } });
+      expect(r.headers["x-frame-options"]).toBe("DENY");
+      expect(String(r.headers["content-security-policy"])).toContain("frame-ancestors 'none'");
+      expect(r.headers["x-content-type-options"]).toBe("nosniff");
+    }
+  });
+});
+
 describe("diagnostics zip", () => {
   it("carries no credentials — incl. the H-series pId, which alone authenticates when API encryption is off", async () => {
     await app.inject({

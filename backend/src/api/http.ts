@@ -47,6 +47,17 @@ export async function buildHttp() {
   const fail = (reply: any, code: number, e: unknown) =>
     reply.code(code).send({ error: String(e instanceof Error ? e.message : e) });
 
+  // Clickjacking: another site must not frame the control surface and trick a LAN user into
+  // clicking "Turn off" (framed requests come from our own origin — the CSRF guard below
+  // can't see them). Plus the usual no-sniff / no-referrer hygiene.
+  app.addHook("onSend", async (_req, reply, payload) => {
+    reply.header("X-Frame-Options", "DENY");
+    reply.header("Content-Security-Policy", "frame-ancestors 'none'; object-src 'none'; base-uri 'none'");
+    reply.header("X-Content-Type-Options", "nosniff");
+    reply.header("Referrer-Policy", "no-referrer");
+    return payload;
+  });
+
   // CSRF: refuse every /api request a browser marks as cross-site, whatever the method —
   // GET /api/setup/scan has a side effect (a subnet sweep) too. See crossSite.ts.
   app.addHook("onRequest", async (req, reply) => {
