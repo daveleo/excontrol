@@ -51,4 +51,8 @@ exec cage -d -s -- chromium \
   --overscroll-history-navigation=0 \
   --disable-pinch \
   --password-store=basic \
-  --check-for-update-interval=31536000
+  --check-for-update-interval=31536000 \
+  ${EXCONTROL_KIOSK_FLAGS:-}
+# EXCONTROL_KIOSK_FLAGS: extra Chromium flags from a root-owned systemd drop-in — e.g. the
+# test rig's --remote-debugging-port=9222 (DevTools protocol, localhost only). Never in a
+# shipped image.
