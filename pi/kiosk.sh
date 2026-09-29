@@ -19,12 +19,13 @@ sed -i 's/"exited_cleanly":false/"exited_cleanly":true/; s/"exit_type":"[^"]*"/"
 
 # cage: -d no client decorations, -s allow VT switching (Ctrl+Alt+F2 for a console).
 exec cage -d -s -- chromium \
-  --kiosk "$URL" \
+  --kiosk "$URL/?kiosk=1" \
   --user-data-dir="$PROFILE" \
   --ozone-platform=wayland \
   --noerrdialogs --disable-infobars --no-first-run \
   --disable-session-crashed-bubble --hide-crash-restore-bubble \
   --disable-features=Translate,TranslateUI \
   --overscroll-history-navigation=0 \
+  --disable-pinch \
   --password-store=basic \
   --check-for-update-interval=31536000

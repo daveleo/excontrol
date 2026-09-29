@@ -37,7 +37,7 @@ export function SystemSection({ initial, version }: { initial: SetupState; versi
 
   /** The server rebinds to the new port a moment after responding — poll for it, then follow. */
   const followToPort = (port: number) => {
-    const target = `${location.protocol}//${location.hostname}:${port}/`;
+    const target = `${location.protocol}//${location.hostname}:${port}/${location.search}`;
     const tryOnce = (attempt: number) => {
       fetch(`${location.protocol}//${location.hostname}:${port}/health`, { signal: AbortSignal.timeout(1500) })
         .then(() => (location.href = target))
@@ -254,7 +254,7 @@ export function BackupSection({ locked }: { locked: boolean }) {
     const res = await importConfig(parsed);
     if (res.portChanged) {
       setMsg({ ok: true, text: `Imported — reconnecting on port ${res.port}…` });
-      setTimeout(() => (location.href = `${location.protocol}//${location.hostname}:${res.port}/`), 1200);
+      setTimeout(() => (location.href = `${location.protocol}//${location.hostname}:${res.port}/${location.search}`), 1200);
     } else {
       setMsg({ ok: true, text: "Imported — reloading…" });
       setTimeout(() => location.reload(), 1000);

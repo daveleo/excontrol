@@ -175,7 +175,7 @@ export function SetupWizard({
 
   /** The server rebinds to the new port a moment after responding — poll for it, then follow. */
   const followToPort = (port: number) => {
-    const target = `${location.protocol}//${location.hostname}:${port}/`;
+    const target = `${location.protocol}//${location.hostname}:${port}/${location.search}`;
     const tryOnce = (attempt: number) => {
       fetch(`${location.protocol}//${location.hostname}:${port}/health`, { signal: AbortSignal.timeout(1500) })
         .then(() => (location.href = target))

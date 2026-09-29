@@ -789,3 +789,32 @@ button.dc-head:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .sch-row { position: relative; }
 .sch-sentence { padding-right: 44px; }
 .sch-x { position: absolute; top: 10px; right: 10px; margin: 0; }
+
+/* ---- kiosk: the appliance's own touch display (?kiosk=1, see lib/kiosk.ts) ---- */
+.kiosk-no-cursor, .kiosk-no-cursor * { cursor: none !important; }
+/* pan only — no pinch-zoom, no overscroll bounce, no text-selection handles on a tap */
+.kiosk { touch-action: pan-x pan-y; overscroll-behavior: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+.kiosk body { overscroll-behavior: none; }
+.kiosk input, .kiosk textarea { user-select: text; }
+
+/* on-screen keyboard: full-screen layers end where the keyboard starts */
+.osk-open body { padding-bottom: var(--osk-h, 0px); }
+.osk-open .modal-scrim, .osk-open .wizard, .osk-open .setup { bottom: var(--osk-h, 0px); }
+.osk {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 90;
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+  background: var(--panel-2); border-top: 1px solid var(--line);
+  box-shadow: 0 -12px 30px -14px rgba(0, 0, 0, 0.35);
+}
+.osk-row { display: flex; gap: 8px; justify-content: center; }
+.osk-key {
+  flex: 1 1 0; max-width: 96px; min-height: 60px; padding: 0;
+  font: inherit; font-size: 22px; color: var(--text);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+}
+.osk-key:active { background: var(--accent-soft); }
+.osk-wide { flex: 1.5 1 0; max-width: 144px; font-size: 18px; }
+.osk-space { flex: 5 1 0; max-width: 480px; font-size: 18px; color: var(--muted); }
+.osk-key.on, .osk-enter { background: var(--accent); border-color: var(--accent); color: #fff; }
+.osk-numeric .osk-key { max-width: 150px; }
