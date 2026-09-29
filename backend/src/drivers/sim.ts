@@ -1,6 +1,7 @@
 import type { ZoneState } from "@excontrol/shared";
 import type { DeviceConfig } from "../config.js";
 import { store } from "../core/state.js";
+import { getCachedZones } from "../core/deviceCache.js";
 import { BaseDriver } from "./types.js";
 
 /** Simulated device — `"simulated": true` on any device in the config. No network: state
@@ -24,7 +25,11 @@ export class SimDriver extends BaseDriver {
   constructor(cfg: DeviceConfig) {
     // a copy — never write pollMs back into the live config
     super({ ...cfg, pollMs: cfg.pollMs ?? 1000 });
-    this.zoneState = initialZones(cfg);
+    // Start from the device cache when there is one — a copied real cache gives the real
+    // preset / scene names, and a sim's own cache carries its state across restarts.
+    // EPS relay zones always come from the config (their on/off follows the sim's bits).
+    const cached = cfg.type === "expromo-eps" ? undefined : getCachedZones(cfg.id);
+    this.zoneState = cached?.length ? cached : initialZones(cfg);
   }
 
   async start(): Promise<void> {
