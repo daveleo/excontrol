@@ -16,7 +16,7 @@ import { store } from "../core/state.js";
 import { getDriver, restartDevices } from "../core/registry.js";
 import { bus } from "../core/bus.js";
 import { getPresets, savePreset, deletePreset, applyPreset } from "../core/presets.js";
-import { getSchedule, setEntries, snooze } from "../core/schedule.js";
+import { getSchedule, setEntries, snooze, ScheduleInputError } from "../core/schedule.js";
 import { powerDomain } from "../core/power.js";
 import { setGroupTarget, saveGroups, noteManual, noteEpsManual, dismissAlert, knownGroup } from "../core/groups.js";
 import {
@@ -280,7 +280,12 @@ export async function buildHttp() {
     { preHandler: requireAuth },
     async (req, reply) => {
       if (!Array.isArray(req.body?.entries)) return reply.code(400).send({ error: "entries[] required" });
-      return setEntries(req.body.entries);
+      try {
+        return setEntries(req.body.entries);
+      } catch (e) {
+        if (e instanceof ScheduleInputError) return fail(reply, 400, e);
+        throw e;
+      }
     },
   );
   app.post<{ Body: { hours?: number; clear?: boolean } }>(

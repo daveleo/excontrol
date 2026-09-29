@@ -109,3 +109,17 @@ describe("isCrossSite", () => {
     expect(isCrossSite({ host: "10.0.0.5:8080", origin: "http://10.0.0.5:3000", "sec-fetch-site": "same-site" })).toBe(true);
   });
 });
+
+describe("schedule input validation", () => {
+  const put = (entries: unknown) =>
+    app.inject({ method: "PUT", url: "/api/schedule", headers: { host: HOST, "content-type": "application/json" }, payload: JSON.stringify({ entries }) });
+  it("a malformed request is rejected whole and the saved schedule is untouched (was: replaced by an invented 17:00 power-off)", async () => {
+    await put([{ label: "Off", time: "17:00", days: [1], action: "power_off", target: "all", enabled: true }]);
+    for (const bad of [[[["x"]]], [null], [{ time: "25:00", action: "power_off" }], [{ time: "17:00", action: "explode" }], [{ time: "17:00", action: "power_off", days: [9] }]]) {
+      expect((await put(bad)).statusCode).toBe(400);
+    }
+    const s = (await app.inject({ method: "GET", url: "/api/schedule", headers: { host: HOST } })).json();
+    expect(s.entries).toHaveLength(1);
+    expect(s.entries[0].label).toBe("Off");
+  });
+});

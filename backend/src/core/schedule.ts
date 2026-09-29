@@ -35,7 +35,31 @@ function persistQuiet(schedule: Schedule): void {
   }
 }
 
+/** A schedule request that doesn't describe a schedule — rejected whole (HTTP 400). */
+export class ScheduleInputError extends Error {}
+
+const ACTIONS: ScheduleAction[] = ["power_on", "power_off", "standby", "apply_preset"];
+
+/** Reject rather than repair: found in testing, a malformed request (nested arrays) was
+ *  "cleaned" into an invented every-day 17:00 power-off that silently replaced the whole
+ *  schedule. Defaults are fine for optional fields, never for what an entry *does*. */
+function assertEntries(entries: unknown[]): void {
+  if (entries.length > 200) throw new ScheduleInputError("too many schedule entries");
+  entries.forEach((e, i) => {
+    const where = `schedule entry ${i + 1}`;
+    if (!e || typeof e !== "object" || Array.isArray(e)) throw new ScheduleInputError(`${where}: not an entry`);
+    const x = e as Partial<ScheduleEntry>;
+    if (typeof x.time !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(x.time)) throw new ScheduleInputError(`${where}: time must be HH:MM`);
+    if (!ACTIONS.includes(x.action as ScheduleAction)) throw new ScheduleInputError(`${where}: unknown action`);
+    if (x.days != null && (!Array.isArray(x.days) || !x.days.every((d) => Number.isInteger(d) && d >= 0 && d <= 6))) {
+      throw new ScheduleInputError(`${where}: days must be 0-6`);
+    }
+    if (x.action === "apply_preset" && typeof x.presetId !== "string") throw new ScheduleInputError(`${where}: scene required`);
+  });
+}
+
 export function setEntries(entries: ScheduleEntry[]): Schedule {
+  assertEntries(entries);
   const clean: ScheduleEntry[] = entries.map((e) => ({
     id: e.id || randomUUID(),
     label: String(e.label ?? "").slice(0, 60) || "Schedule",
