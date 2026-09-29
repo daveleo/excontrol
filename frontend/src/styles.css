@@ -792,6 +792,10 @@ button.dc-head:focus-visible { outline: 2px solid var(--accent); outline-offset:
 
 /* ---- kiosk: the appliance's own touch display (?kiosk=1, see lib/kiosk.ts) ---- */
 .kiosk-no-cursor, .kiosk-no-cursor * { cursor: none !important; }
+/* the Pi's cursor theme is transparent (pi/kiosk.sh) — a real mouse gets this arrow instead */
+.kiosk-mouse, .kiosk-mouse * {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cpath d='M4 2.5v16.2l4.3-4 2.9 6.4 2.7-1.2-2.9-6.3h5.9z' fill='%23111' stroke='%23fff' stroke-width='1.4' stroke-linejoin='round'/%3E%3C/svg%3E") 4 3, default !important;
+}
 /* pan only — no pinch-zoom, no overscroll bounce, no text-selection handles on a tap */
 .kiosk { touch-action: pan-x pan-y; overscroll-behavior: none; user-select: none; -webkit-tap-highlight-color: transparent; }
 .kiosk body { overscroll-behavior: none; }

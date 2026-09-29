@@ -7,8 +7,10 @@ export const IS_KIOSK = new URLSearchParams(location.search).get("kiosk") === "1
  *  for touch; someone with a mouse attached normally has a keyboard too. */
 export let lastPointerType: string = "touch";
 
-/** Kiosk-wide behaviour that is not a component: cursor only while a real mouse is moving,
- *  no browser gestures (pinch-zoom, long-press menu, drag-out of links/images). */
+/** Kiosk-wide behaviour that is not a component: cursor only while a real mouse is in use,
+ *  no browser gestures (pinch-zoom, long-press menu, drag-out of links/images).
+ *  The Pi's cursor theme is fully transparent (pi/kiosk.sh), so the visible arrow in mouse
+ *  mode is the CSS image in `.kiosk-mouse` — the theme can't show one by accident. */
 export function initKiosk(): void {
   if (!IS_KIOSK) return;
   const root = document.documentElement;
@@ -16,7 +18,9 @@ export function initKiosk(): void {
 
   const onPointer = (e: PointerEvent) => {
     lastPointerType = e.pointerType;
-    root.classList.toggle("kiosk-no-cursor", e.pointerType !== "mouse");
+    const mouse = e.pointerType === "mouse";
+    root.classList.toggle("kiosk-mouse", mouse);
+    root.classList.toggle("kiosk-no-cursor", !mouse);
   };
   window.addEventListener("pointerdown", onPointer, { capture: true, passive: true });
   window.addEventListener("pointermove", onPointer, { capture: true, passive: true });

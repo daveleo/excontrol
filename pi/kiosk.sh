@@ -17,10 +17,11 @@ mkdir -p "$PROFILE"
 sed -i 's/"exited_cleanly":false/"exited_cleanly":true/; s/"exit_type":"[^"]*"/"exit_type":"Normal"/' \
   "$PROFILE/Default/Preferences" 2>/dev/null || true
 
-# cage draws its own cursor until a client takes the pointer — on a touch-only screen that
-# never happens, so it sits mid-screen forever. Give cage (only) a theme whose cursors are a
-# 1x1 transparent Xcursor; Chromium keeps the system theme, so a real mouse still shows one
-# (the page hides it again on touch — frontend/src/lib/kiosk.ts).
+# Chromium takes pointer focus at start-up and shows its theme's arrow mid-screen, and Blink
+# won't apply the page's `cursor: none` until a real mouse moves — which never happens on a
+# touch-only screen. So cage AND Chromium get a theme whose every cursor is a 1x1 transparent
+# Xcursor; when a real mouse is used, the page switches on its own CSS-image arrow, which
+# Chromium draws independently of the theme (frontend/src/lib/kiosk.ts).
 HIDDEN="$PROFILE/hidden-cursor"
 if [ ! -s "$HIDDEN/default/cursors/default" ]; then
   mkdir -p "$HIDDEN/default/cursors"
@@ -36,7 +37,7 @@ fi
 
 # cage: -d no client decorations, -s allow VT switching (Ctrl+Alt+F2 for a console).
 export XCURSOR_PATH="$HIDDEN"
-exec cage -d -s -- env -u XCURSOR_PATH chromium \
+exec cage -d -s -- chromium \
   --kiosk "$URL/?kiosk=1" \
   --user-data-dir="$PROFILE" \
   --ozone-platform=wayland \
