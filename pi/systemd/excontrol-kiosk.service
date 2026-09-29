@@ -1,0 +1,27 @@
+[Unit]
+Description=eXcontrol local display (cage + Chromium kiosk on tty1)
+Wants=excontrol.service
+After=excontrol.service systemd-user-sessions.service plymouth-quit-wait.service
+# Take tty1 over from the login prompt.
+Conflicts=getty@tty1.service
+After=getty@tty1.service
+
+[Service]
+User=@USER@
+PAMName=login
+TTYPath=/dev/tty1
+StandardInput=tty
+StandardOutput=journal
+StandardError=journal
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+UtmpIdentifier=tty1
+UtmpMode=user
+Environment=EXCONTROL_DATA_DIR=@DATA_DIR@
+ExecStart=@APP_DIR@/pi/kiosk.sh
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,18 @@
+[Unit]
+Description=eXcontrol backend
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+WorkingDirectory=@APP_DIR@
+Environment=EXCONTROL_DATA_DIR=@DATA_DIR@
+ExecStart=/usr/bin/node @APP_DIR@/backend/dist/cli.js
+Restart=always
+RestartSec=2
+# cli.ts caps its own graceful stop at 5 s; this is the backstop.
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target
