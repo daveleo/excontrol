@@ -6,6 +6,7 @@ import { store } from "../core/state.js";
 import { isSettingsLocked } from "../config.js";
 import { verifyToken } from "../core/auth.js";
 import { log } from "../logger.js";
+import { isCrossSite } from "./crossSite.js";
 
 /** Attaches a WS endpoint at /ws that streams state to the front-end. Gated the same way
  *  as the REST API: once a password is set, a browser can't even reach the live feed
@@ -17,6 +18,8 @@ export function attachWs(server: Server): () => void {
     server,
     path: "/ws",
     verifyClient: (info, callback) => {
+      // cross-site WebSocket hijacking: another site's page must not read the live state
+      if (isCrossSite(info.req.headers)) return callback(false, 403, "cross-site");
       if (!isSettingsLocked()) return callback(true);
       const token = new URL(info.req.url ?? "", "http://internal").searchParams.get("token") ?? undefined;
       if (verifyToken(token)) return callback(true);

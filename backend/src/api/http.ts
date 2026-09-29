@@ -33,6 +33,7 @@ import { restartHttpServer } from "../core/httpControl.js";
 import { notifyAutoStartChanged } from "../core/autoStartControl.js";
 import { requestUpdateCheck } from "../core/updateControl.js";
 import { log } from "../logger.js";
+import { isCrossSite } from "./crossSite.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -45,6 +46,14 @@ export async function buildHttp() {
 
   const fail = (reply: any, code: number, e: unknown) =>
     reply.code(code).send({ error: String(e instanceof Error ? e.message : e) });
+
+  // CSRF: refuse every /api request a browser marks as cross-site, whatever the method —
+  // GET /api/setup/scan has a side effect (a subnet sweep) too. See crossSite.ts.
+  app.addHook("onRequest", async (req, reply) => {
+    if (req.url.startsWith("/api/") && isCrossSite(req.headers)) {
+      return reply.code(403).send({ error: "cross-site request refused" });
+    }
+  });
 
   /** The one access gate: once a password is set, it protects the whole control surface —
    *  viewing state, operating devices, presets, schedule — not just settings. Left open
@@ -421,9 +430,13 @@ export async function buildHttp() {
   });
 
   app.get("/api/diagnostics", { preHandler: requireAuth }, async (_req, reply) => {
-    const setup = toSetupState(); // secrets already redacted
+    const setup = toSetupState(); // passwords / secret keys already redacted
+    // …but not the H-series project id: with the controller's API encryption off, the request
+    // signature is md5(timestamp + pId), so the pId alone authenticates. A support zip leaves
+    // the site — treat it as a credential.
+    const devices = setup.devices.map((d) => (d.pId ? { ...d, pId: "(redacted)" } : d));
     const files: Record<string, Uint8Array> = {
-      "config-redacted.json": strToU8(JSON.stringify({ app: setup.app, devices: setup.devices }, null, 2)),
+      "config-redacted.json": strToU8(JSON.stringify({ app: setup.app, devices }, null, 2)),
       "state.json": strToU8(JSON.stringify(store.snapshot(), null, 2)),
       "system.json": strToU8(JSON.stringify(
         {
