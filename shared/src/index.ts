@@ -27,6 +27,30 @@ export interface Preset {
   /** live signal-presence for a physical input (eXview HDMI ports) — absent where the
    *  concept doesn't apply (a saved preset, an internal source like Android, etc.). */
   hasSignal?: boolean;
+  /** H-series: the preset's layers, for drawing a thumbnail. Coordinates are fractions
+   *  (0..1) of the zone's canvas; stacking bottom → top. */
+  layers?: PresetLayer[];
+}
+
+export interface PresetLayer {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** stacking order, higher = on top */
+  z: number;
+  /** input name as the controller calls it, e.g. "input 4-1" */
+  source: string;
+  /** live: does that input currently carry a signal? absent = unknown */
+  signal?: boolean;
+}
+
+/** A zone's drawable surface: its pixel size (for the aspect ratio) and the physical
+ *  output cells it's built from, as fractions of the canvas. */
+export interface ZoneCanvas {
+  width: number;
+  height: number;
+  cells: Array<{ x: number; y: number; w: number; h: number }>;
 }
 
 /** One controllable screen on a controller, or (for an EPS with independent output
@@ -48,6 +72,8 @@ export interface ZoneState {
    *  configurable timeout (set on the device itself, invisible to this app until it happens),
    *  not just whatever this app last commanded. `on` mirrors this (true only for "on"). */
   powerState?: "on" | "blackout" | "standby";
+  /** H-series: the screen's layout, for preset thumbnails (see Preset.layers) */
+  canvas?: ZoneCanvas;
 }
 
 export interface DeviceState {

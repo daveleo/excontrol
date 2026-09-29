@@ -14,6 +14,7 @@ import { UnlockModal } from "./components/UnlockModal.js";
 import { UpdateBanner } from "./components/UpdateBanner.js";
 import { ThemeToggle } from "./components/ThemeToggle.js";
 import { AccessGate } from "./components/AccessGate.js";
+import { SimpleView } from "./components/SimpleView.js";
 import { BRAND } from "@excontrol/shared";
 import { isDisplay } from "./lib/status.js";
 import { useNarrow } from "./lib/useNarrow.js";
@@ -63,8 +64,12 @@ export function App() {
   if (authPhase === "locked") {
     return <AccessGate onUnlocked={() => setAuthPhase("open")} />;
   }
+  if (SIMPLE_VIEW) return <SimpleView onUnauthorized={handleUnauthorized} />;
   return <Dashboard onUnauthorized={handleUnauthorized} />;
 }
+
+/** End-customer overlay — power, schedule and preset pictures only (components/SimpleView). */
+const SIMPLE_VIEW = new URLSearchParams(location.search).get("view") === "simple";
 
 function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
   const { state, connected, toasts, dismiss } = useShowroom(onUnauthorized);

@@ -6,6 +6,10 @@ set -eu
 CONFIG="${EXCONTROL_DATA_DIR:-$HOME/excontrol-data}/excontrol.config.json"
 PORT=$(node -e 'try{const c=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));process.stdout.write(String(c.app?.httpPort??8080))}catch{process.stdout.write("8080")}' "$CONFIG")
 URL="http://localhost:$PORT"
+# The local screen is the customer's: the simple view (power, schedule, preset pictures).
+# EXCONTROL_KIOSK_VIEW=full (e.g. a systemd drop-in) shows the installer dashboard instead.
+QUERY="kiosk=1"
+[ "${EXCONTROL_KIOSK_VIEW:-simple}" = "simple" ] && QUERY="$QUERY&view=simple"
 
 # Don't show Chromium's error page on boot — wait (up to 60 s) for the backend.
 i=0
@@ -38,7 +42,7 @@ fi
 # cage: -d no client decorations, -s allow VT switching (Ctrl+Alt+F2 for a console).
 export XCURSOR_PATH="$HIDDEN"
 exec cage -d -s -- chromium \
-  --kiosk "$URL/?kiosk=1" \
+  --kiosk "$URL/?$QUERY" \
   --user-data-dir="$PROFILE" \
   --ozone-platform=wayland \
   --noerrdialogs --disable-infobars --no-first-run \

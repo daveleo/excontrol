@@ -2,8 +2,32 @@ import { createHash } from "node:crypto";
 import CryptoJS from "crypto-js";
 import { BaseDriver } from "./types.js";
 import type { HConfig, ZoneConfig } from "../config.js";
-import type { Preset, ZoneState, ProbeResult } from "@excontrol/shared";
+import type { Preset, PresetLayer, ZoneCanvas, ZoneState, ProbeResult } from "@excontrol/shared";
 import { netReason } from "../setup/neterr.js";
+
+interface RawLayer {
+  general?: { zorder?: number };
+  source?: { name?: string; inputId?: number };
+  window: { x: number; y: number; width: number; height: number };
+}
+
+/** ZoneCanvas plus its absolute origin, which layer windows are relative to. Kept on the
+ *  zone state too (the extra fields are harmless to the UI). */
+type ZoneCanvasAbs = ZoneCanvas & { x0: number; y0: number };
+
+/** The canvas is the bounding box of the screen's output cells. */
+function toCanvas(cells?: Array<{ x: number; y: number; width: number; height: number }>): ZoneCanvasAbs | undefined {
+  const cs = (cells ?? []).filter((c) => c.width > 0 && c.height > 0);
+  if (!cs.length) return undefined;
+  const x0 = Math.min(...cs.map((c) => c.x));
+  const y0 = Math.min(...cs.map((c) => c.y));
+  const width = Math.max(...cs.map((c) => c.x + c.width)) - x0;
+  const height = Math.max(...cs.map((c) => c.y + c.height)) - y0;
+  return {
+    x0, y0, width, height,
+    cells: cs.map((c) => ({ x: (c.x - x0) / width, y: (c.y - y0) / height, w: c.width / width, h: c.height / height })),
+  };
+}
 
 /**
  * NovaStar H series Open API — one driver instance, one or more zones (screens).
@@ -43,7 +67,9 @@ export class NovastarHDriver extends BaseDriver {
             this.readDetail(m.screenId, m.deviceId),
             this.readPresets(m.screenId, m.deviceId),
           ]);
-          this.patchZone(z.id, { brightness: detail.brightness, blackout: detail.blackout, presets });
+          const canvas = detail.canvas ?? (z.canvas as ZoneCanvasAbs | undefined);
+          const withLayers = await this.attachLayouts(m.screenId, m.deviceId, presets, canvas);
+          this.patchZone(z.id, { brightness: detail.brightness, blackout: detail.blackout, presets: withLayers, canvas });
         }
         this.online();
       } catch (e) {
@@ -145,15 +171,68 @@ export class NovastarHDriver extends BaseDriver {
     this.setZones(zones);
   }
 
-  private async readDetail(screenId: number, deviceId: number): Promise<{ brightness?: number; blackout?: boolean }> {
-    const body = await this.call<{ brightness?: number; Ftb?: { enable?: number } }>(
-      "/screen/readDetail",
-      { deviceId, screenId },
-    );
+  private async readDetail(screenId: number, deviceId: number): Promise<{ brightness?: number; blackout?: boolean; canvas?: ZoneCanvasAbs }> {
+    const body = await this.call<{
+      brightness?: number;
+      Ftb?: { enable?: number };
+      outputMode?: { screenInterfaces?: Array<{ x: number; y: number; width: number; height: number }> };
+    }>("/screen/readDetail", { deviceId, screenId });
     return {
       brightness: typeof body?.brightness === "number" ? body.brightness : undefined,
       blackout: body?.Ftb ? body.Ftb.enable === 0 : undefined,
+      canvas: toCanvas(body?.outputMode?.screenInterfaces),
     };
+  }
+
+  /* ---- preset layouts (thumbnails) ----
+   * /preset/readDetail returns each layer's window in the same absolute coordinates as the
+   * screen's output cells (both offset, typically at 1000,1000). Details change only when
+   * someone edits a preset, so they're cached and re-read once a minute, not every poll. */
+
+  private layoutCache = new Map<string, { at: number; layers: RawLayer[] }>();
+  private signals = new Map<number, boolean>();
+  private signalsAt = 0;
+
+  private async attachLayouts(screenId: number, deviceId: number, presets: Preset[], canvas?: ZoneCanvasAbs): Promise<Preset[]> {
+    if (!canvas) return presets;
+    const now = Date.now();
+    if (now - this.signalsAt > 10_000) {
+      this.signalsAt = now;
+      await this.readSignals().catch((e) => this.log.debug({ err: e }, "input list read failed"));
+    }
+    for (const p of presets) {
+      const key = `${deviceId}:${screenId}:${p.id}`;
+      const hit = this.layoutCache.get(key);
+      if (hit && now - hit.at < 60_000) continue;
+      try {
+        const d = await this.call<{ layers?: RawLayer[] }>("/preset/readDetail", { deviceId, screenId, presetId: p.id });
+        this.layoutCache.set(key, { at: now, layers: d?.layers ?? [] });
+      } catch (e) {
+        this.log.debug({ err: e, presetId: p.id }, "preset detail read failed");
+      }
+    }
+    return presets.map((p) => {
+      const raw = this.layoutCache.get(`${deviceId}:${screenId}:${p.id}`)?.layers;
+      if (!raw) return p;
+      const layers: PresetLayer[] = raw
+        .filter((l) => l.window && l.window.width > 0 && l.window.height > 0)
+        .map((l) => ({
+          x: (l.window.x - canvas.x0) / canvas.width,
+          y: (l.window.y - canvas.y0) / canvas.height,
+          w: l.window.width / canvas.width,
+          h: l.window.height / canvas.height,
+          z: l.general?.zorder ?? 0,
+          source: (l.source?.name || "").trim() || "Layer",
+          signal: l.source?.inputId != null ? this.signals.get(l.source.inputId) : undefined,
+        }))
+        .sort((a, b) => a.z - b.z);
+      return { ...p, layers };
+    });
+  }
+
+  private async readSignals(): Promise<void> {
+    const body = await this.call<{ inputs?: Array<{ inputId: number; resolution?: { width?: number } }> }>("/input/readList", { deviceId: 0 });
+    this.signals = new Map((body?.inputs ?? []).map((i) => [i.inputId, (i.resolution?.width ?? 0) > 0]));
   }
 
   private async readPresets(screenId: number, deviceId: number): Promise<Preset[]> {
