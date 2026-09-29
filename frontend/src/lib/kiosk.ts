@@ -16,14 +16,32 @@ export function initKiosk(): void {
   const root = document.documentElement;
   root.classList.add("kiosk", "kiosk-no-cursor");
 
-  const onPointer = (e: PointerEvent) => {
-    lastPointerType = e.pointerType;
-    const mouse = e.pointerType === "mouse";
+  const setMode = (type: string) => {
+    lastPointerType = type;
+    const mouse = type === "mouse";
     root.classList.toggle("kiosk-mouse", mouse);
     root.classList.toggle("kiosk-no-cursor", !mouse);
   };
-  window.addEventListener("pointerdown", onPointer, { capture: true, passive: true });
-  window.addEventListener("pointermove", onPointer, { capture: true, passive: true });
+  // A "mouse" pointer event is not proof of a mouse: at start-up the compositor places the
+  // pointer (one zero-movement pointermove), and some touch panels expose a mouse/tablet
+  // interface too. Measured on the Pi: the page was in mouse mode before anyone touched
+  // anything, showing the arrow mid-screen. So: a mouse click counts at once; mouse *movement*
+  // only after it has travelled MOUSE_TRAVEL_PX in total since the last touch.
+  const MOUSE_TRAVEL_PX = 10;
+  let travel = 0;
+  let last: { x: number; y: number } | null = null;
+  window.addEventListener("pointerdown", (e) => {
+    travel = 0;
+    last = null;
+    setMode(e.pointerType);
+  }, { capture: true, passive: true });
+  window.addEventListener("pointermove", (e) => {
+    if (e.pointerType !== "mouse") return setMode(e.pointerType);
+    if (lastPointerType === "mouse") return;
+    if (last) travel += Math.hypot(e.clientX - last.x, e.clientY - last.y);
+    last = { x: e.clientX, y: e.clientY };
+    if (travel >= MOUSE_TRAVEL_PX) setMode("mouse");
+  }, { capture: true, passive: true });
 
   // Belt and braces with Chromium's --disable-pinch: no ctrl+wheel / trackpad zoom either.
   window.addEventListener("wheel", (e) => { if (e.ctrlKey) e.preventDefault(); }, { passive: false });
