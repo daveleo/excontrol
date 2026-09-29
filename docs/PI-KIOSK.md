@@ -54,9 +54,12 @@ same `backend/dist/cli.js` that runs from source on Windows runs unchanged on ar
 | File | What it does |
 |---|---|
 | `pi/install.sh` | Development install from a git checkout: renders the two systemd units (user, app dir and data dir substituted), installs cage + Chromium if missing, enables and starts both services. `sudo ./pi/install.sh [user]` |
-| `pi/systemd/excontrol.service` | The backend: `node backend/dist/cli.js`, `Restart=always`, `EXCONTROL_DATA_DIR` set, `TimeoutStopSec=15` as a backstop |
+| `pi/systemd/excontrol.service` | The backend: `node backend/dist/cli.js`, `Restart=always` with back-off and no start limit, sandboxed (`ProtectSystem=strict`, no capabilities, syscall filter, `UMask=0077`; `systemd-analyze security` 1.6 OK) — only the data folder is writable |
 | `pi/systemd/excontrol-kiosk.service` | The local display: a logind session on **tty1** (`PAMName=login`, `TTYPath=/dev/tty1`, `Conflicts=getty@tty1`), runs `pi/kiosk.sh`, restarts itself |
-| `pi/kiosk.sh` | Waits for the backend, prepares the Chromium profile and the invisible cursor theme, then `exec cage -- chromium --kiosk …` |
+| `pi/kiosk.sh` | Waits for the backend (no time limit, so there's never a browser error page), prepares the Chromium profile and the invisible cursor theme, then `exec cage -- chromium --kiosk …`. `EXCONTROL_KIOSK_VIEW=full` shows the standard dashboard; `EXCONTROL_KIOSK_FLAGS` adds Chromium flags (test rig only) |
+| `pi/touch-reset.sh` | Runs as root before the kiosk, once per boot: re-enumerates every USB touchscreen (a software re-plug; fixes "touch dead after a cold boot") |
+| `pi/chromium-policy.json` | → `/etc/chromium/policies/managed/`: no DevTools, only `http://localhost`, no files/downloads/print/extensions/incognito/sign-in |
+| `pi/keyd-kiosk.conf` | → `/etc/keyd/default.conf`: drops browser shortcuts (new window/tab, address bar, history, DevTools, zoom, close, VT switch) from physical keyboards at evdev level |
 | `pi/demo/excontrol.config.json` | A generic, showroom-shaped demo: every device `simulated` |
 | `pi/demo/apply.sh` | Loads a demo folder into the unit's config (keeps the `app` section, backs up config + device cache). `sh pi/demo/apply.sh [dir]` |
 
@@ -177,7 +180,30 @@ Verified with `grim -c` (screenshot including the cursor layer): nothing is draw
 - JS: ctrl+wheel prevented; `contextmenu` (long-press), `dragstart` and `gesturestart`
   prevented.
 
-### 4.4 Other Chromium flags (`pi/kiosk.sh`)
+### 4.4 Keyboard lockdown (keyd + Chromium policy)
+
+`--kiosk` covers only Chromium's first window. Tested with a kernel-level keyboard, Ctrl+N /
+Ctrl+T / Alt+Home opened a normal browser window with an address bar on top of the kiosk, and
+`http://localhost:8080` (the installer dashboard) was reachable from there. Page JavaScript can't
+block browser shortcuts, so:
+- **keyd** (`pi/keyd-kiosk.conf`) drops them at evdev level, for every physical keyboard. Typing,
+  Ctrl+A/C/V, Tab and Enter still work. 16/16 tested shortcuts → no effect; positive control
+  passes.
+- **The Chromium policy** (`pi/chromium-policy.json`) blocks DevTools (dialog "DevTools not
+  allowed"), every URL except localhost, file dialogs, downloads, printing, extensions, incognito
+  and sign-in. Note: it also blocks the DevTools *protocol*; the test rig sets the policy aside
+  when it needs it.
+
+A technician uses SSH or the network dashboard, not the kiosk keyboard.
+
+### 4.5 Two views on one screen — the presenter gesture
+
+The kiosk opens the **customer view**. **Press and hold the brand ("eXcontrol", top left) for
+2 seconds** to switch to the **standard dashboard**, and the same gesture switches back. A normal tap
+does nothing, so a customer never finds it. It works with touch and mouse, and on network browsers
+too.
+
+### 4.6 Other Chromium flags (`pi/kiosk.sh`)
 
 `--noerrdialogs --disable-infobars --no-first-run --disable-session-crashed-bubble
 --hide-crash-restore-bubble --disable-features=Translate,TranslateUI --password-store=basic
@@ -254,7 +280,11 @@ scale): A/B rootfs with RAUC or Mender, with automatic rollback.
 
 ## 7. Known issues
 
-- ❗ **Touch is dead after a cold boot until the USB cable is re-plugged** (iiyama, Pixart
+- 🔧 **Touch after a cold boot — fix in place, awaiting a human touch.** `pi/touch-reset.sh`
+  re-enumerates the panel once per boot; the new HID instance is bound directly by
+  `hid-multitouch`, exactly as after a physical re-plug (verified in 16+ reboots). The original
+  analysis follows.
+- **Originally: touch dead after a cold boot until the USB cable is re-plugged** (iiyama, Pixart
   "Optical Touch" `093a:8020`). At boot the panel binds to `hid-generic` (~4.3 s), then
   re-binds to `hid-multitouch` (~5.2 s). cage starts at ~14 s and libinput lists the device as
   `touch` (event1), yet no touches arrive until a replug. The panel also exposes a "Mouse"

@@ -143,7 +143,23 @@ An SVG with `viewBox = 0 0 (aspect·100) 100`, so it scales crisply at any size:
 
 ---
 
-## 6. Limits and next steps
+## 6. Added after the UX review (2026-09-30)
+
+- **"Live" means live.** Only OBS and eXview *report* their current scene/input; for them the tile
+  says **Live**. H-series and COEX only remember what eXcontrol last recalled, so their tile says
+  **Last chosen** (and the standard dashboard notes "highlighted = last chosen"). Nothing is live
+  on a screen without power. (`reportsActivePreset()` in `shared`.)
+- **Service presets hidden:** Setup › device › *On the dashboard* has a checkbox per
+  preset/scene/input. Unticked ones (test patterns, mapping scenes) disappear from both dashboards
+  but stay usable in scenes. Stored as `hiddenPresets: ["zoneId:presetId"]` on the device.
+- **Customer input names:** Setup › device › *Input names* ("CSE1" → "Laptop"), used in the
+  pictures. Stored as `inputNames` on the device. Inputs can also be renamed on the H9 itself; the
+  driver picks that up within a minute.
+- **Pictures in the standard dashboard** too, inside the H-series card.
+- **Last-known pictures:** layouts are cached like the rest of a device's state, so the pictures
+  stay visible while a screen is powered off.
+
+## 7. Limits and next steps
 
 - **No "which preset is live" from the H9.** The Live chip marks presets recalled *through
   eXcontrol*; a preset recalled on the controller itself is not reflected. (Worth asking NovaStar,

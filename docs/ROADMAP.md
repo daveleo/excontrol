@@ -586,26 +586,60 @@ iiyama touch monitor and against the real showroom H9. Details:
   the port-change rebind (`ws` v8 doesn't close clients on `wss.close()`), and the CLI
   shutdown had no upper bound.
 
+**Overnight 2026-09-29/30: robustness, security and UX run** (full record:
+[`TEST-REPORT-PI-2026-09-30.md`](TEST-REPORT-PI-2026-09-30.md)). Fixed, each proven before and
+re-tested after:
+- **Power-cut safety (critical):** durable writes, last-good config, recovery banner. Hard
+  resets under write load went from **2/2 configs destroyed** to **16/16 clean**.
+- **CSRF / WebSocket hijack:** cross-site guard.
+- **Clickjacking:** anti-framing headers.
+- **Validation:** strict schedule validation, and pId redacted in diagnostics.
+- **Unit hardening:** sandboxed systemd unit (9.2 → 1.6), config `600`, and the SD-card-wear fix
+  for the device cache.
+- **Kiosk:** keyd + Chromium policy against keyboard escapes (16/16 blocked); an unbounded backend
+  wait (no browser error page); the cursor fix; touch re-plug at boot.
+
+**Human-first UX pass on both dashboards:**
+- **Honest headline:** "Unknown" when the power unit can't be reached, and what's actually
+  different instead of "Partly on".
+- **"Live" only where devices report it;** elsewhere "Last chosen".
+- **Setup:** per-preset "On the dashboard" and input names.
+- **Less noise:** no badge, no always-on dot, "+1 hour" only near a shutdown; a single theme.
+- **Presenter gesture:** press and hold the brand for 2 s to switch customer ↔ standard.
+
+Tests 186 → 209.
+
 ### Merge plan → `main`
 
 Almost everything is platform-neutral. Suggested order, each step independently shippable:
 
-1. **Bug fixes (merge first, they fix the Windows build too):** `backend/src/api/ws.ts`
-   (terminate clients on detach) and `backend/src/cli.ts` (bounded shutdown). Smoke-test a
-   packaged Electron build: port change in Settings, and quit with a dashboard open.
+1. **Bug fixes and security (merge first, they fix the Windows build too):**
+   - **Shutdown:** `backend/src/api/ws.ts` (terminate clients on detach) and `backend/src/cli.ts`
+     (bounded shutdown).
+   - **Power-cut safety:** `core/durableWrite.ts`, config recovery + `RecoveryBanner`, the
+     device-cache write policy.
+   - **Web security:** `api/crossSite.ts` (CSRF/WebSocket hijack), security headers, strict
+     schedule validation, pId redaction.
+
+   All platform-neutral. Smoke-test a packaged Electron build: port change in Settings, quit with a
+   dashboard open, and the Companion Generic-HTTP buttons (no `Origin` → allowed).
 2. **Simulated devices:** `drivers/sim.ts`, `registry.ts`, `config.ts` / `shared/setup.ts`
    (`simulated` flag and wizard round-trip), `setup/probe.ts`, the `presets.ts` scene
    fallback, and the Setup switch in `SetupWizard.tsx`. Add unit tests for the sim
    (EPS sequencing, power-loss → powered-off → boot → online).
-3. **Preset visualization + customer view:** `shared/src/index.ts` (`PresetLayer`,
+3. **Human-first UX + dashboard settings:**
+   - **Frontend:** `lib/status.ts` (honest headline), `PowerBar`, `ScenesStrip`, `DeviceCard`
+     (hidden presets, pictures, "last chosen"), `DashboardOptions` (Setup), `lib/viewSwitch.ts`.
+   - **Data model:** `hiddenPresets` / `inputNames` in the config, `SetupDevice` and `DeviceState`.
+4. **Preset visualization + customer view:** `shared/src/index.ts` (`PresetLayer`,
    `ZoneCanvas`), `drivers/novastar-h.ts` (layouts, canvas, signal), `PresetThumb.tsx`,
    `SimpleView.tsx`, the `App.tsx` switch and the `styles.css` block. Before merging: unit tests
    for `toCanvas` / normalisation, and decide how the view is chosen (a setting instead of
    the URL). It works in the Electron build as-is (open `/?view=simple`).
-4. **Kiosk layer:** `lib/kiosk.ts`, `OnScreenKeyboard.tsx`, the `main.tsx` mount, the
+5. **Kiosk layer:** `lib/kiosk.ts`, `OnScreenKeyboard.tsx`, the `main.tsx` mount, the
    `location.search` carry-over in the port-follow navigations, and the kiosk CSS. It is inert
    without `?kiosk=1`, so it is safe on Windows; useful for Windows touch kiosks too.
-5. **Pi-only (`pi/`, `docs/PI-KIOSK.md`):** can merge any time (it adds files only), or stay on
+6. **Pi-only (`pi/`, `docs/PI-KIOSK.md`):** can merge any time (it adds files only), or stay on
    the branch until the P1 `.deb` packaging exists.
 
 Nothing on the branch contains showroom credentials or internal addresses. The showroom
