@@ -19,6 +19,8 @@ TTYVTDisallocate=yes
 UtmpIdentifier=tty1
 UtmpMode=user
 Environment=EXCONTROL_DATA_DIR=@DATA_DIR@
+# Once per boot, as root (+): re-enumerate USB touch panels — a software replug (see the script).
+ExecStartPre=+@APP_DIR@/pi/touch-reset.sh
 ExecStart=@APP_DIR@/pi/kiosk.sh
 Restart=always
 RestartSec=3
