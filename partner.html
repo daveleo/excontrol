@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>eXcontrol — for partnere</title>
+<meta name="description" content="eXcontrol fra Expromo: LED-installationer ind i AV-verdenen — uden besvær.">
+<style>
+  :root {
+    --bg: #0b0e13; --panel: #131820; --panel2: #1a212c; --line: #263040; --text: #e8edf4; --muted: #95a1b2;
+    --accent: #4f86f3; --accent2: #2fb3a0; --warm: #e0823d; --violet: #a371f7; --pink: #e5689c; --gold: #d4b12a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, "SF Pro Display", "Segoe UI", Inter, Roboto, sans-serif; }
+  body { line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 28px; }
+  a { color: var(--accent); }
+
+  /* hero */
+  .hero { position: relative; overflow: hidden; padding: 64px 0 40px; }
+  .hero::before { content: ""; position: absolute; inset: -40% -10% auto -10%; height: 520px;
+    background: radial-gradient(600px 300px at 20% 30%, rgba(79,134,243,.28), transparent 70%),
+                radial-gradient(500px 280px at 80% 20%, rgba(47,179,160,.22), transparent 70%),
+                radial-gradient(420px 240px at 60% 80%, rgba(163,113,247,.18), transparent 70%); filter: blur(10px); }
+  .hero .wrap { position: relative; display: grid; grid-template-columns: 1.1fr .9fr; gap: 40px; align-items: center; }
+  .eyebrow { font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent2); font-weight: 700; }
+  h1 { font-size: clamp(38px, 5vw, 62px); line-height: 1.04; margin: 12px 0 18px; letter-spacing: -.02em; }
+  h1 .grad { background: linear-gradient(90deg, #7fb0ff, #58d6c3 55%, #c9a6ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lead { font-size: 19px; color: #c9d3e0; max-width: 560px; }
+  .brand { font-weight: 800; letter-spacing: -.01em; }
+  .pill-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+  .pill { padding: 7px 12px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--line); font-size: 13.5px; font-weight: 600; }
+  .pill i { font-style: normal; color: var(--accent2); margin-right: 6px; }
+
+  /* phone/tablet mock */
+  .device { background: #0f141b; border: 1px solid var(--line); border-radius: 26px; padding: 16px; box-shadow: 0 30px 80px -30px rgba(0,0,0,.8), inset 0 0 0 6px #070a0e; }
+  .device .bar { display: flex; justify-content: space-between; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+  .device .room { font-size: 11px; letter-spacing: .12em; color: var(--muted); }
+  .device .state { font-size: 22px; font-weight: 750; display: flex; align-items: center; gap: 8px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #3fb950; box-shadow: 0 0 10px #3fb950; }
+  .btn { padding: 9px 14px; border-radius: 10px; font-weight: 700; font-size: 13px; background: #238636; }
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 7px; }
+  .tile.on { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,134,243,.25); }
+  .tile svg { width: 100%; display: block; border-radius: 7px; }
+  .tile span { display: block; font-size: 11px; font-weight: 650; margin-top: 6px; color: #cfd7e3; }
+
+  /* stats */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 18px 0 8px; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
+  .stat b { display: block; font-size: 32px; letter-spacing: -.02em; }
+  .stat small { color: var(--muted); font-size: 13.5px; }
+
+  section { padding: 38px 0; }
+  h2 { font-size: 30px; letter-spacing: -.015em; margin: 0 0 8px; }
+  .sub { color: var(--muted); margin: 0 0 24px; max-width: 760px; }
+
+  /* architecture */
+  .arch { background: linear-gradient(180deg, var(--panel), #10151c); border: 1px solid var(--line); border-radius: 22px; padding: 14px; }
+  .arch svg { width: 100%; height: auto; display: block; }
+
+  /* value cards */
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 20px; }
+  .card .ic { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; font-size: 19px; margin-bottom: 10px; }
+  .card h3 { margin: 0 0 6px; font-size: 17px; }
+  .card p { margin: 0; color: #b8c3d1; font-size: 14.5px; }
+
+  /* steps */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; counter-reset: s; }
+  .step { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 22px 20px 20px; }
+  .step::before { counter-increment: s; content: counter(s); position: absolute; top: -14px; left: 18px; width: 30px; height: 30px; border-radius: 50%;
+    background: var(--accent); color: #fff; font-weight: 800; display: grid; place-items: center; font-size: 15px; }
+  .step h3 { margin: 6px 0 6px; font-size: 16.5px; }
+  .step p { margin: 0; color: #b8c3d1; font-size: 14.5px; }
+
+  /* deploy */
+  .deploy { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .dep { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 20px; display: flex; gap: 16px; align-items: flex-start; }
+  .dep svg { flex: none; }
+  .dep h3 { margin: 0 0 4px; font-size: 17px; }
+  .dep p { margin: 0; color: #b8c3d1; font-size: 14.5px; }
+
+  .quote { border-radius: 22px; padding: 30px 32px; background: linear-gradient(120deg, rgba(79,134,243,.18), rgba(47,179,160,.12) 60%, rgba(163,113,247,.14)); border: 1px solid var(--line); }
+  .quote p { font-size: 22px; line-height: 1.4; margin: 0; letter-spacing: -.01em; }
+  .quote small { display: block; margin-top: 10px; color: var(--muted); font-size: 14px; }
+  footer { padding: 26px 0 40px; color: var(--muted); font-size: 13px; }
+
+  @media (max-width: 900px) {
+    .hero .wrap, .deploy { grid-template-columns: 1fr; }
+    .cards, .steps { grid-template-columns: 1fr; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media print { .hero::before { display: none; } body { background: #0b0e13; -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div>
+      <div class="eyebrow">Expromo · for partnere</div>
+      <h1><span class="brand">eXcontrol</span><br><span class="grad">LED ind i AV-verdenen.<br>Uden besvær.</span></h1>
+      <p class="lead">Vi har bygget eXcontrol til vores egne installationer. Nu gør vi det til jeres fordel:
+        ét testet mellemled mellem jeres AV-system og alt LED-udstyret — så I integrerer hurtigere,
+        og slutkunden aldrig behøver røre en LED-controllers web-UI.</p>
+      <div class="pill-row">
+        <span class="pill"><i>●</i>NovaStar H-Series</span>
+        <span class="pill"><i>●</i>NovaStar COEX</span>
+        <span class="pill"><i>●</i>Expromo eXview</span>
+        <span class="pill"><i>●</i>Expromo EPS</span>
+        <span class="pill"><i>●</i>OBS Studio</span>
+        <span class="pill"><i>●</i>Bitfocus Companion</span>
+      </div>
+    </div>
+
+    <!-- touchscreen mock: what the end customer sees -->
+    <div class="device" aria-label="Eksempel på kundeskærm">
+      <div class="bar">
+        <div><div class="room">SHOWROOM</div><div class="state"><span class="dot"></span>Tændt</div></div>
+        <span class="btn">Sluk</span>
+      </div>
+      <div class="tiles">
+        <div class="tile on"><svg viewBox="0 0 178 100"><rect width="178" height="100" rx="4" fill="#070a0e"/><rect x="2" y="2" width="87" height="48" rx="3" fill="#4f86f3" opacity=".85"/><rect x="89" y="2" width="87" height="48" rx="3" fill="#4f86f3" opacity=".85"/><rect x="2" y="50" width="87" height="48" rx="3" fill="#e0823d" opacity=".85"/></svg><span>Hovedvæg</span></div>
+        <div class="tile"><svg viewBox="0 0 178 100"><rect width="178" height="100" rx="4" fill="#070a0e"/><rect x="2" y="2" width="174" height="96" rx="3" fill="#2fb3a0" opacity=".85"/><rect x="110" y="56" width="60" height="36" rx="3" fill="#a371f7" opacity=".95"/></svg><span>Præsentation</span></div>
+        <div class="tile"><svg viewBox="0 0 178 100"><rect width="178" height="100" rx="4" fill="#070a0e"/><rect x="2" y="2" width="58" height="96" rx="3" fill="#e5689c" opacity=".85"/><rect x="60" y="2" width="58" height="96" rx="3" fill="#d4b12a" opacity=".85"/><rect x="118" y="2" width="58" height="96" rx="3" fill="#4f86f3" opacity=".85"/></svg><span>Event</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="stats">
+      <div class="stat"><b>2-vejs</b><small>Live status fra hver enhed — ikke bare kommandoer ud</small></div>
+      <div class="stat"><b>&lt; 5 min</b><small>Fra udpakning til kørende: enheder findes automatisk på netværket</small></div>
+      <div class="stat"><b>1 API</b><small>Én integration i stedet for én pr. producent</small></div>
+      <div class="stat"><b>200+</b><small>Automatiske tests + natlige stresstests (strømsvigt, nedbrud, sikkerhed)</small></div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section>
+    <h2>Mellemleddet, der taler alle sprogene</h2>
+    <p class="sub">Frontenden er kun toppen af isbjerget. Bag den kører en motor, der kender hver enheds protokol,
+      sekvenserer strømmen sikkert og deler live status med alt på netværket.</p>
+    <div class="arch">
+      <svg viewBox="0 0 1100 430" role="img" aria-label="Arkitektur: enheder, eXcontrol-motoren og brugerflader">
+        <defs>
+          <linearGradient id="core" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#2a4f9e"/><stop offset="1" stop-color="#1b6f66"/></linearGradient>
+          <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7fa4d9"/></marker>
+          <filter id="glow"><feGaussianBlur stdDeviation="14"/></filter>
+        </defs>
+        <!-- left: devices -->
+        <text x="40" y="38" fill="#95a1b2" font-size="13" letter-spacing="2">GODKENDTE ENHEDER</text>
+        <g font-size="15" font-weight="650" fill="#e8edf4">
+          <rect x="30" y="56"  width="240" height="50" rx="12" fill="#1a212c" stroke="#263040"/><circle cx="54" cy="81" r="6" fill="#4f86f3"/><text x="72" y="86">NovaStar H-Series</text>
+          <rect x="30" y="116" width="240" height="50" rx="12" fill="#1a212c" stroke="#263040"/><circle cx="54" cy="141" r="6" fill="#4f86f3"/><text x="72" y="146">NovaStar COEX</text>
+          <rect x="30" y="176" width="240" height="50" rx="12" fill="#1a212c" stroke="#263040"/><circle cx="54" cy="201" r="6" fill="#2fb3a0"/><text x="72" y="206">Expromo eXview</text>
+          <rect x="30" y="236" width="240" height="50" rx="12" fill="#1a212c" stroke="#263040"/><circle cx="54" cy="261" r="6" fill="#d4b12a"/><text x="72" y="266">Expromo EPS · strøm</text>
+          <rect x="30" y="296" width="240" height="50" rx="12" fill="#1a212c" stroke="#263040"/><circle cx="54" cy="321" r="6" fill="#a371f7"/><text x="72" y="326">OBS Studio</text>
+          <rect x="30" y="356" width="240" height="50" rx="12" fill="#141a22" stroke="#263040" stroke-dasharray="5 5"/><text x="72" y="386" fill="#95a1b2" font-weight="500">+ næste godkendte enhed</text>
+        </g>
+        <!-- arrows devices <-> core -->
+        <g stroke="#7fa4d9" stroke-width="2" fill="none" marker-start="url(#ar)" marker-end="url(#ar)" opacity=".85">
+          <path d="M272 81 C 350 81, 360 190, 420 200"/><path d="M272 141 C 340 141, 370 200, 420 206"/>
+          <path d="M272 201 L 420 212"/><path d="M272 261 C 340 261, 370 222, 420 218"/>
+          <path d="M272 321 C 350 321, 360 236, 420 226"/>
+        </g>
+        <text x="300" y="424" fill="#95a1b2" font-size="12.5">status ↔ kommandoer, på hver enheds egen protokol</text>
+        <!-- core -->
+        <circle cx="560" cy="212" r="150" fill="#2a4f9e" opacity=".35" filter="url(#glow)"/>
+        <rect x="422" y="108" width="276" height="210" rx="26" fill="url(#core)" stroke="#5a86d6"/>
+        <text x="560" y="152" text-anchor="middle" fill="#fff" font-size="26" font-weight="800">eXcontrol</text>
+        <text x="560" y="176" text-anchor="middle" fill="#cfe0ff" font-size="13">motoren</text>
+        <g fill="#e8f1ff" font-size="13.5" font-weight="600" text-anchor="middle">
+          <rect x="446" y="194" width="110" height="30" rx="9" fill="rgba(255,255,255,.12)"/><text x="501" y="214">Grupper</text>
+          <rect x="564" y="194" width="110" height="30" rx="9" fill="rgba(255,255,255,.12)"/><text x="619" y="214">Skemaer</text>
+          <rect x="446" y="232" width="110" height="30" rx="9" fill="rgba(255,255,255,.12)"/><text x="501" y="252">Scener</text>
+          <rect x="564" y="232" width="110" height="30" rx="9" fill="rgba(255,255,255,.12)"/><text x="619" y="252">Sikker strøm</text>
+          <rect x="446" y="270" width="228" height="30" rx="9" fill="rgba(255,255,255,.12)"/><text x="560" y="290">Live status · 2-vejs</text>
+        </g>
+        <!-- right: surfaces -->
+        <g stroke="#58d6c3" stroke-width="2" fill="none" marker-end="url(#ar)" opacity=".85">
+          <path d="M700 180 C 760 150, 780 92, 830 90"/><path d="M700 200 L 830 162"/>
+          <path d="M700 222 L 830 234"/><path d="M700 244 C 770 270, 780 306, 830 306"/>
+          <path d="M700 262 C 760 320, 780 376, 830 378"/>
+        </g>
+        <text x="840" y="38" fill="#95a1b2" font-size="13" letter-spacing="2">ALLE FÅR SAMME SANDHED</text>
+        <g font-size="15" font-weight="650" fill="#e8edf4">
+          <rect x="830" y="66"  width="240" height="50" rx="12" fill="#1a212c" stroke="#263040"/><text x="850" y="96">Touchskærm · kiosk</text>
+          <rect x="830" y="138" width="240" height="50" rx="12" fill="#1a212c" stroke="#263040"/><text x="850" y="168">Web · tablet · mobil</text>
+          <rect x="830" y="210" width="240" height="50" rx="12" fill="#1a212c" stroke="#263040"/><text x="850" y="240">Bitfocus Companion</text>
+          <rect x="830" y="282" width="240" height="50" rx="12" fill="#1a212c" stroke="#263040"/><text x="850" y="312">REST-API · WebSocket</text>
+          <rect x="830" y="354" width="240" height="50" rx="12" fill="#1a212c" stroke="#263040"/><text x="850" y="384">Partnerens AV-system</text>
+        </g>
+      </svg>
+    </div>
+  </section>
+
+  <section>
+    <h2>Hvorfor det betaler sig for partnere</h2>
+    <p class="sub">Mindre tid på protokoller og supportopkald. Mere tid på installationer, der sælger.</p>
+    <div class="cards">
+      <div class="card"><div class="ic" style="background:rgba(79,134,243,.18)">⚡</div><h3>Hurtigere levering</h3>
+        <p>Enhederne findes automatisk på netværket — opsætning på under 5 minutter. Ingen egen driverudvikling pr. producent.</p></div>
+      <div class="card"><div class="ic" style="background:rgba(47,179,160,.18)">🛡️</div><h3>Færre fejl hos kunden</h3>
+        <p>Slutkunden trykker på en scene — ikke i en LED-controllers web-UI. Sikker, sekventeret strøm og ærlig status på skærmen.</p></div>
+      <div class="card"><div class="ic" style="background:rgba(163,113,247,.18)">🔌</div><h3>Ét API i stedet for fem</h3>
+        <p>Grupper, skemaer og scener i ét programmørvenligt API. Jeres system taler med eXcontrol — eXcontrol taler med resten.</p></div>
+      <div class="card"><div class="ic" style="background:rgba(224,130,61,.18)">✅</div><h3>Testet og godkendt</h3>
+        <p>Alt, der kommer ind i eXcontrol, er testet og godkendt af Expromo — mod rigtig hardware, strømsvigt og nedbrud.</p></div>
+      <div class="card"><div class="ic" style="background:rgba(229,104,156,.18)">📡</div><h3>Live overalt</h3>
+        <p>Samme live status på touchskærm, tablet, mobil og API — alle på netværket ser det samme, i samme øjeblik.</p></div>
+      <div class="card"><div class="ic" style="background:rgba(212,177,42,.18)">🔄</div><h3>Altid opdateret</h3>
+        <p>Versionsstyrede opdateringer kan nå alle installationer — når kunden ønsker det, ikke før.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Sådan fungerer det</h2>
+    <p class="sub">Partneren gør det, partneren er god til. eXcontrol klarer resten.</p>
+    <div class="steps">
+      <div class="step"><h3>Opsæt presets i controlleren</h3><p>Lav og navngiv presets i NovaStar H-Series eller COEX, som I plejer.</p></div>
+      <div class="step"><h3>eXcontrol læser dem tilbage</h3><p>Presets, navne og layout læses automatisk — og vises som billeder, kunden forstår med det samme.</p></div>
+      <div class="step"><h3>Kunden eller systemet trykker</h3><p>Fra touchskærm, tablet, Companion eller API. Status flyder tilbage i realtid.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Kører der, hvor I har brug for det</h2>
+    <div class="deploy">
+      <div class="dep">
+        <svg width="54" height="54" viewBox="0 0 54 54"><rect x="3" y="7" width="48" height="32" rx="4" fill="#1a212c" stroke="#4f86f3" stroke-width="2"/><rect x="20" y="41" width="14" height="4" fill="#4f86f3"/><rect x="13" y="45" width="28" height="3" rx="1.5" fill="#4f86f3"/><path d="M13 17h13v10H13zM28 17h13v10H28z" fill="#4f86f3" opacity=".6"/></svg>
+        <div><h3>Windows</h3><p>Standard .exe-installer. Starter med Windows, opdaterer sig selv efter godkendelse.</p></div>
+      </div>
+      <div class="dep">
+        <svg width="54" height="54" viewBox="0 0 54 54"><rect x="4" y="5" width="46" height="30" rx="4" fill="#1a212c" stroke="#2fb3a0" stroke-width="2"/><rect x="18" y="38" width="18" height="12" rx="2" fill="#2fb3a0" opacity=".75"/><circle cx="23" cy="44" r="1.6" fill="#0b0e13"/><circle cx="31" cy="44" r="1.6" fill="#0b0e13"/><path d="M16 26c4-8 9-10 11-10s7 2 11 10" stroke="#2fb3a0" stroke-width="2" fill="none"/></svg>
+        <div><h3>Linux · Raspberry Pi</h3><p>Debian-baseret — en Raspberry Pi med touchskærm bliver en færdig kontrolenhed. Kører som service med automatisk genstart.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="quote">
+      <p>Det er ikke en Crestron-killer. Det er værktøjet, der gør LED-installationer så nemme at integrere, som de kan blive — fordi Expromo tager det tunge løft med protokoller og API'er.</p>
+      <small>eXcontrol · Expromo</small>
+    </div>
+  </section>
+</main>
+
+<footer class="wrap">© Expromo · eXcontrol · <a href="index.html">Om eXcontrol</a></footer>
+</body>
+</html>
