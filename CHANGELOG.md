@@ -4,6 +4,7 @@ Newest first. Detailed release notes are on the GitHub Releases page.
 
 ## 2026-10-07
 
+- PROJECT.md: added What it is for, How to run, How to use and What is what (shown on the workspace dashboard).
 - Workspace move to `D:\Work\projects\excontrol`; added PROJECT.md and this changelog.
 
 ## 2026-09-30 — pi-kiosk branch
