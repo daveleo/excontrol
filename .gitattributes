@@ -1,0 +1,8 @@
+# Normalize line endings: store text as LF; check out per platform.
+* text=auto
+
+# Pin platform-sensitive scripts regardless of checkout OS:
+*.sh  text eol=lf
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
