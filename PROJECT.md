@@ -77,4 +77,5 @@ Private infrastructure notes (hosts, access, showroom layout) are in `projects\e
 
 - Website (gh-pages): checked out at `.worktrees\gh-pages`
 - Roadmap: docs/ROADMAP.md · Pi: docs/PI-KIOSK.md · Power: docs/POWER.md
-- Related: `projects\companion-eps` (standalone Companion module for EPS)
+- Private notes (infra, access, showroom layout): [[projects/excontrol-private/PROJECT|eXcontrol — private notes]]
+- Related: [[projects/companion-eps/PROJECT|companion-eps]] (standalone Companion module for EPS), [[projects/EPS/PROJECT|EPS firmware]] (the power units it drives), [[projects/exview-control/PROJECT|eXview Control]] (eXview protocol work)
