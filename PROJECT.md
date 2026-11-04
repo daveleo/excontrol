@@ -5,7 +5,7 @@ priority: 3
 version: v0.3.1 (released) · pi-kiosk branch in progress
 deadline:
 next: Clean up the test Pi, then run the real-device test list for the pi-kiosk branch
-updated: 2026-10-07
+updated: 2026-11-04
 repo: daveleo/excontrol
 url: https://daveleo.github.io/excontrol/
 ---
